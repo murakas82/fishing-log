@@ -15,11 +15,18 @@
       <p>All catches for your account.</p>
     </header>
 
+    <!-- LOADING -->
+    <div class="card" id="loadingCard">
+      <p>Loading...</p>
+    </div>
+
+    <!-- IF NOT LOGGED IN -->
     <div class="card" id="needLogin" style="display:none;">
       <p>You need to be logged in to see your catches.</p>
       <button id="goLoginBtn">Back to main page</button>
     </div>
 
+    <!-- CATCHES LIST -->
     <div class="card" id="catchesCard" style="display:none;">
       <p style="font-size:0.9rem; margin-bottom:10px;">
         Logged in as <span id="userEmail"></span>
@@ -52,18 +59,19 @@
       authDomain: "fishing-log-app-murx.firebaseapp.com",
       projectId: "fishing-log-app-murx",
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1056807867882",
-      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
+      messagingSenderId: "1656807867882",
+      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    const needLogin  = document.getElementById("needLogin");
-    const card       = document.getElementById("catchesCard");
-    const listEl     = document.getElementById("catchList");
-    const userEmailEl = document.getElementById("userEmail");
+    const loadingCard  = document.getElementById("loadingCard");
+    const needLogin    = document.getElementById("needLogin");
+    const card         = document.getElementById("catchesCard");
+    const listEl       = document.getElementById("catchList");
+    const userEmailEl  = document.getElementById("userEmail");
 
     document.getElementById("backBtn").onclick = () => {
       window.location.href = "index.html";
@@ -73,6 +81,9 @@
     };
 
     onAuthStateChanged(auth, async (user) => {
+      // hide loading once we know
+      loadingCard.style.display = "none";
+
       if (!user) {
         needLogin.style.display = "block";
         card.style.display      = "none";
