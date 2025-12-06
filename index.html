@@ -5,7 +5,6 @@
   <title>My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- External CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -18,7 +17,7 @@
 
     <!-- AUTH CARD -->
     <div class="card" id="authCard">
-      <h2 class="section-title">Log in or sign up</h2>
+      <h2>Log in or sign up</h2>
 
       <label>Email</label>
       <input id="authEmail" type="email" placeholder="you@example.com">
@@ -38,27 +37,27 @@
     <div class="card" id="userCard" style="display:none;">
       <div class="user-row">
         <div>
-          <div class="user-label">Logged in as</div>
-          <div class="user-email" id="userEmail"></div>
+          <div>Logged in as</div>
+          <div id="userEmail"></div>
         </div>
         <button id="logoutBtn" class="secondary-btn">Log out</button>
       </div>
     </div>
 
-    <!-- MAIN APP CONTENT -->
+    <!-- APP CONTENT -->
     <div id="appContent" style="display:none;">
 
       <!-- STATS -->
       <div class="card">
-        <h2 class="section-title">Stats</h2>
-        <div id="stats" class="stats-container">
+        <h2>Stats</h2>
+        <div id="stats">
           <p class="empty-state">No stats yet – add your first catch!</p>
         </div>
       </div>
 
       <!-- ADD CATCH -->
       <div class="card">
-        <h2 class="section-title">Add a catch</h2>
+        <h2>Add a catch</h2>
 
         <label>Species</label>
         <input id="species" type="text" placeholder="Pike, Trout, Perch...">
@@ -69,18 +68,24 @@
         <label>Spot name</label>
         <input id="spot" type="text" placeholder="Lake X…">
 
-        <label>Notes</label>
-        <textarea id="notes" placeholder="Weather, lure..."></textarea>
+        <label>Lure</label>
+        <input id="lure" type="text" placeholder="Spinner, Jig, Worm…">
 
-        <label>Photo (optional)</label>
-        <input id="photo" type="file" accept="image/*">
+        <label>Water depth (m)</label>
+        <input id="depth" type="number" step="0.1" placeholder="3.5">
+
+        <label>Water temperature (°C)</label>
+        <input id="temp" type="number" step="0.1" placeholder="12.8">
+
+        <label>Notes</label>
+        <textarea id="notes" placeholder="Weather, behavior, etc."></textarea>
 
         <button id="addCatchBtn">Save catch</button>
       </div>
 
       <!-- CATCH LIST -->
       <div class="card">
-        <h2 class="section-title">Your catches</h2>
+        <h2>Your catches</h2>
         <div id="catchList" class="catch-list">
           <p class="empty-state">No catches yet.</p>
         </div>
@@ -88,36 +93,24 @@
     </div>
   </div>
 
-  <!-- 🔥 FIREBASE + APP LOGIC -->
+  <!-- FIREBASE LOGIC -->
   <script type="module">
-    /*****************************************************
-     * 1. IMPORT FIREBASE SDK (from CDN)
-     *****************************************************/
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 
     import {
-      getAuth,
-      onAuthStateChanged,
+      getAuth, onAuthStateChanged,
       createUserWithEmailAndPassword,
       signInWithEmailAndPassword,
       signOut
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     import {
-      getFirestore,
-      collection,
-      addDoc,
-      getDocs,
-      query,
-      where,
-      deleteDoc,
-      doc
+      getFirestore, collection, addDoc,
+      getDocs, query, where, deleteDoc, doc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /*****************************************************
-     * 2. YOUR FIREBASE CONFIG (from your screenshot)
-     *****************************************************/
+    /* YOUR FIREBASE CONFIG */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -125,12 +118,8 @@
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
       messagingSenderId: "1656807867882",
       appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
-      // measurementId is optional and not needed here
     };
 
-    /*****************************************************
-     * 3. INITIALIZE FIREBASE
-     *****************************************************/
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -138,9 +127,7 @@
     let currentUser = null;
     let catches = [];
 
-    /*****************************************************
-     * 4. AUTH HANDLERS
-     *****************************************************/
+    /* AUTH */
     const emailEl = document.getElementById("authEmail");
     const passEl  = document.getElementById("authPassword");
     const msgEl   = document.getElementById("authMessage");
@@ -148,26 +135,18 @@
     document.getElementById("loginBtn").onclick = async () => {
       try {
         await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) {
-        console.error(err);
-        msgEl.textContent = err.message;
-      }
+      } catch (err) { msgEl.textContent = err.message; }
     };
 
     document.getElementById("signupBtn").onclick = async () => {
       try {
         await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) {
-        console.error(err);
-        msgEl.textContent = err.message;
-      }
+      } catch (err) { msgEl.textContent = err.message; }
     };
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-    /*****************************************************
-     * 5. AUTH STATE
-     *****************************************************/
+    /* AUTH STATE HANDLER */
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
 
@@ -186,12 +165,8 @@
       }
     });
 
-    /*****************************************************
-     * 6. FIRESTORE OPERATIONS
-     *****************************************************/
+    /* LOAD CATCHES */
     async function loadCatches() {
-      if (!currentUser) return;
-
       const q = query(
         collection(db, "catches"),
         where("userId", "==", currentUser.uid)
@@ -201,57 +176,38 @@
       renderCatches();
     }
 
-    async function saveCatch(c) {
-      await addDoc(collection(db, "catches"), { ...c, userId: currentUser.uid });
-      await loadCatches();
-    }
+    /* SAVE CATCH */
+    document.getElementById("addCatchBtn").onclick = async () => {
+      if (!currentUser) return;
 
+      const data = {
+        species: document.getElementById("species").value.trim(),
+        weightKg: parseFloat(document.getElementById("weight").value),
+        spotName: document.getElementById("spot").value.trim(),
+        lure: document.getElementById("lure").value.trim(),
+        depth: parseFloat(document.getElementById("depth").value),
+        temperature: parseFloat(document.getElementById("temp").value),
+        notes: document.getElementById("notes").value.trim(),
+        timestamp: Date.now(),
+        userId: currentUser.uid
+      };
+
+      if (!data.species || isNaN(data.weightKg)) {
+        alert("Species and weight required!");
+        return;
+      }
+
+      await addDoc(collection(db, "catches"), data);
+      await loadCatches();
+    };
+
+    /* DELETE CATCH */
     async function deleteCatch(id) {
       await deleteDoc(doc(db, "catches", id));
       await loadCatches();
     }
 
-    /*****************************************************
-     * 7. ADD CATCH BUTTON
-     *****************************************************/
-    document.getElementById("addCatchBtn").onclick = async () => {
-      if (!currentUser) return alert("Please log in");
-
-      const species = document.getElementById("species").value.trim();
-      const weight  = parseFloat(document.getElementById("weight").value);
-      const spot    = document.getElementById("spot").value.trim();
-      const notes   = document.getElementById("notes").value.trim();
-      const file    = document.getElementById("photo").files[0];
-
-      if (!species || isNaN(weight)) {
-        alert("Species and weight are required.");
-        return;
-      }
-
-      const data = {
-        species,
-        weightKg: weight,
-        spotName: spot,
-        notes,
-        timestamp: Date.now(),
-        photoDataUrl: null
-      };
-
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          data.photoDataUrl = e.target.result;
-          await saveCatch(data);
-        };
-        reader.readAsDataURL(file);
-      } else {
-        await saveCatch(data);
-      }
-    };
-
-    /*****************************************************
-     * 8. RENDER CATCHES
-     *****************************************************/
+    /* RENDER CATCHES */
     function renderCatches() {
       const list = document.getElementById("catchList");
       list.innerHTML = "";
@@ -264,32 +220,25 @@
       catches.slice().reverse().forEach(c => {
         const div = document.createElement("div");
         div.className = "catch-item";
+
         div.innerHTML = `
           <div class="catch-top">
             <span>${c.species} • ${c.weightKg} kg</span>
             <span>${new Date(c.timestamp).toLocaleDateString()}</span>
           </div>
-          <div class="catch-meta">${c.spotName || ""}</div>
-          <div class="catch-meta">${c.notes || ""}</div>
+          <div class="catch-meta">Spot: ${c.spotName || "-"}</div>
+          <div class="catch-meta">Lure: ${c.lure || "-"}</div>
+          <div class="catch-meta">Depth: ${c.depth || "-"} m</div>
+          <div class="catch-meta">Water temp: ${c.temperature || "-"} °C</div>
+          <div class="catch-notes">${c.notes || ""}</div>
         `;
-
-        if (c.photoDataUrl) {
-          const img = document.createElement("img");
-          img.className = "catch-photo";
-          img.src = c.photoDataUrl;
-          div.appendChild(img);
-        }
 
         const del = document.createElement("button");
         del.className = "delete-btn";
         del.textContent = "Delete";
         del.onclick = () => deleteCatch(c.id);
 
-        const actions = document.createElement("div");
-        actions.className = "catch-actions";
-        actions.appendChild(del);
-
-        div.appendChild(actions);
+        div.appendChild(del);
         list.appendChild(div);
       });
     }
