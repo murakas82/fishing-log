@@ -12,7 +12,7 @@
   <div class="app">
     <header>
       <h1>My Fishing Log</h1>
-      <p>Track your catches anywhere – now with login.</p>
+      <p>Track your catches anywhere – with login & cloud sync.</p>
     </header>
 
     <!-- AUTH CARD (shown when logged out) -->
@@ -97,8 +97,18 @@
       signInWithEmailAndPassword,
       signOut
     } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      query,
+      where,
+      deleteDoc,
+      doc
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
 
-    // ---- YOUR FIREBASE CONFIG (from your screenshot) ----
+    // ---- YOUR FIREBASE CONFIG (from your project) ----
     const firebaseConfig = {
       apiKey: "AIzaSyCXID74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -106,41 +116,16 @@
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
       messagingSenderId: "1658087867882",
       appId: "1:1658087867882:web:e59ddd8f6353d190080e93"
-      // measurementId is optional; not needed here
     };
 
     // ---- INITIALIZE FIREBASE ----
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    const db = getFirestore(app);
 
     // ---- APP STATE ----
     let currentUser = null;
     let catches = [];
-
-    function storageKeyForUser(uid) {
-      return `fishing_catches_${uid}`;
-    }
-
-    // Load from localStorage for current user
-    function loadCatches() {
-      if (!currentUser) return [];
-      const key = storageKeyForUser(currentUser.uid);
-      const json = localStorage.getItem(key);
-      if (!json) return [];
-      try {
-        return JSON.parse(json);
-      } catch (e) {
-        console.error("Error parsing stored catches", e);
-        return [];
-      }
-    }
-
-    // Save to localStorage for current user
-    function saveCatches(catchesArray) {
-      if (!currentUser) return;
-      const key = storageKeyForUser(currentUser.uid);
-      localStorage.setItem(key, JSON.stringify(catchesArray));
-    }
 
     // ---- STATS RENDERING ----
     function renderStats() {
@@ -208,7 +193,59 @@
       statsEl.appendChild(list);
     }
 
-    // ---- CATCHES RENDERING ----
+    // ---- LOAD CATCHES FROM FIRESTORE ----
+    async function loadCatchesFromFirestore() {
+      if (!currentUser) {
+        catches = [];
+        renderCatches();
+        return;
+      }
+
+      try {
+        const q = query(
+          collection(db, "catches"),
+          where("userId", "==", currentUser.uid)
+        );
+        const snapshot = await getDocs(q);
+        catches = snapshot.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }));
+        renderCatches();
+      } catch (err) {
+        console.error("Error loading catches:", err);
+        alert("Could not load catches (check console).");
+      }
+    }
+
+    // ---- ADD CATCH TO FIRESTORE ----
+    async function addCatchToFirestore(catchData) {
+      if (!currentUser) return;
+      try {
+        await addDoc(collection(db, "catches"), {
+          ...catchData,
+          userId: currentUser.uid
+        });
+        await loadCatchesFromFirestore();
+      } catch (err) {
+        console.error("Error saving catch:", err);
+        alert("Could not save catch (check console).");
+      }
+    }
+
+    // ---- DELETE CATCH FROM FIRESTORE ----
+    async function deleteCatchFromFirestore(id) {
+      if (!currentUser) return;
+      try {
+        await deleteDoc(doc(db, "catches", id));
+        await loadCatchesFromFirestore();
+      } catch (err) {
+        console.error("Error deleting catch:", err);
+        alert("Could not delete catch (check console).");
+      }
+    }
+
+    // ---- RENDER CATCHES ----
     function renderCatches() {
       const listEl = document.getElementById("catchList");
       listEl.innerHTML = "";
@@ -224,7 +261,7 @@
 
       if (catches.length === 0) {
         const p = document.createElement("p");
-          p.className = "empty-state";
+        p.className = "empty-state";
         p.textContent = "No catches yet. Add your first one!";
         listEl.appendChild(p);
         renderStats();
@@ -271,7 +308,12 @@
           const deleteBtn = document.createElement("button");
           deleteBtn.className = "delete-btn";
           deleteBtn.textContent = "Delete";
-          deleteBtn.addEventListener("click", () => deleteCatch(c.id));
+          deleteBtn.addEventListener("click", () => {
+            const confirmed = confirm("Delete this catch? This cannot be undone.");
+            if (confirmed) {
+              deleteCatchFromFirestore(c.id);
+            }
+          });
 
           actions.appendChild(deleteBtn);
           wrapper.appendChild(actions);
@@ -286,16 +328,6 @@
       renderStats();
     }
 
-    // ---- DELETE CATCH ----
-    function deleteCatch(id) {
-      const confirmed = confirm("Delete this catch? This cannot be undone.");
-      if (!confirmed) return;
-
-      catches = catches.filter(c => c.id !== id);
-      saveCatches(catches);
-      renderCatches();
-    }
-
     // ---- FORM: ADD CATCH ----
     const speciesInput = document.getElementById("species");
     const weightInput = document.getElementById("weight");
@@ -304,8 +336,16 @@
     const photoInput = document.getElementById("photo");
     const addCatchBtn = document.getElementById("addCatchBtn");
 
+    function clearForm() {
+      speciesInput.value = "";
+      weightInput.value = "";
+      spotInput.value = "";
+      notesInput.value = "";
+      photoInput.value = "";
+    }
+
     if (addCatchBtn) {
-      addCatchBtn.addEventListener("click", () => {
+      addCatchBtn.addEventListener("click", async () => {
         if (!currentUser) {
           alert("Please log in first.");
           return;
@@ -322,34 +362,26 @@
           return;
         }
 
-        const createCatch = (photoDataUrl) => {
-          const newCatch = {
-            id: Date.now(),
-            species,
-            weightKg: weightValue,
-            spotName: spotValue,
-            notes: notesValue,
-            timestamp: Date.now(),
-            photoDataUrl
-          };
-
-          catches.push(newCatch);
-          saveCatches(catches);
-          renderCatches();
-
-          speciesInput.value = "";
-          weightInput.value = "";
-          spotInput.value = "";
-          notesInput.value = "";
-          photoInput.value = "";
+        const baseCatch = {
+          species,
+          weightKg: weightValue,
+          spotName: spotValue,
+          notes: notesValue,
+          timestamp: Date.now(),
+          photoDataUrl: null
         };
 
         if (file) {
           const reader = new FileReader();
-          reader.onload = (event) => createCatch(event.target.result);
+          reader.onload = async (event) => {
+            baseCatch.photoDataUrl = event.target.result;
+            await addCatchToFirestore(baseCatch);
+            clearForm();
+          };
           reader.readAsDataURL(file);
         } else {
-          createCatch(null);
+          await addCatchToFirestore(baseCatch);
+          clearForm();
         }
       });
     }
@@ -383,7 +415,7 @@
       appContent.style.display = "none";
       userEmailEl.textContent = "";
       catches = [];
-      renderCatches(); // will show "log in" / empty state
+      renderCatches();
     }
 
     // ---- AUTH EVENT HANDLERS ----
@@ -437,18 +469,17 @@
     }
 
     // ---- AUTH STATE LISTENER ----
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
       currentUser = user || null;
       if (currentUser) {
         setLoggedInUI(currentUser);
-        catches = loadCatches();
-        renderCatches();
+        await loadCatchesFromFirestore();
       } else {
         setLoggedOutUI();
       }
     });
 
-    // Initial render (not logged in)
+    // Initial render
     renderCatches();
   </script>
 </body>
