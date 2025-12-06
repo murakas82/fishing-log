@@ -15,6 +15,12 @@
       <p>Fill in the details of your catch.</p>
     </header>
 
+    <!-- LOADING -->
+    <div class="card" id="loadingCard">
+      <p>Loading...</p>
+    </div>
+
+    <!-- FORM (only if logged in) -->
     <div class="card" id="protectedContent" style="display:none;">
       <p style="font-size:0.9rem; margin-bottom:10px;">
         Logged in as <span id="userEmail"></span>
@@ -47,6 +53,7 @@
       <p id="formMessage" class="auth-message"></p>
     </div>
 
+    <!-- MESSAGE IF NOT LOGGED IN -->
     <div class="card" id="needLogin" style="display:none;">
       <p>You need to be logged in to add a catch.</p>
       <button id="goLoginBtn">Go to main page</button>
@@ -70,20 +77,20 @@
       authDomain: "fishing-log-app-murx.firebaseapp.com",
       projectId: "fishing-log-app-murx",
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1056807867882",
-      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
+      messagingSenderId: "1656807867882",
+      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
+    const loadingCard      = document.getElementById("loadingCard");
     const protectedContent = document.getElementById("protectedContent");
     const needLogin        = document.getElementById("needLogin");
     const userEmailEl      = document.getElementById("userEmail");
     const msgEl            = document.getElementById("formMessage");
 
-    // Back / go login buttons
     document.getElementById("backBtn").onclick = () => {
       window.location.href = "index.html";
     };
@@ -92,14 +99,18 @@
     };
 
     onAuthStateChanged(auth, (user) => {
+      // hide loading as soon as we know
+      loadingCard.style.display = "none";
+
       if (!user) {
         protectedContent.style.display = "none";
-        needLogin.style.display = "block";
+        needLogin.style.display        = "block";
         return;
       }
-      needLogin.style.display = "none";
+
+      needLogin.style.display        = "none";
       protectedContent.style.display = "block";
-      userEmailEl.textContent = user.email;
+      userEmailEl.textContent        = user.email;
 
       document.getElementById("saveCatchBtn").onclick = async () => {
         msgEl.textContent = "";
@@ -130,7 +141,6 @@
             timestamp: Date.now()
           });
 
-          // After save, go back to main page
           window.location.href = "index.html";
         } catch (err) {
           console.error(err);
