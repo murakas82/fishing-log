@@ -5,9 +5,10 @@
   <title>My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Load external CSS -->
+  <!-- External CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div class="app">
     <header>
@@ -15,15 +16,15 @@
       <p>Track your catches anywhere – with login & cloud sync.</p>
     </header>
 
-    <!-- AUTH CARD (shown when logged out) -->
+    <!-- AUTH CARD -->
     <div class="card" id="authCard">
       <h2 class="section-title">Log in or sign up</h2>
 
-      <label for="authEmail">Email</label>
-      <input id="authEmail" type="email" placeholder="you@example.com" />
+      <label>Email</label>
+      <input id="authEmail" type="email" placeholder="you@example.com">
 
-      <label for="authPassword">Password</label>
-      <input id="authPassword" type="password" placeholder="Choose a password" />
+      <label>Password</label>
+      <input id="authPassword" type="password" placeholder="Password">
 
       <div class="auth-buttons">
         <button id="loginBtn">Log in</button>
@@ -33,7 +34,7 @@
       <p id="authMessage" class="auth-message"></p>
     </div>
 
-    <!-- USER CARD (shown when logged in) -->
+    <!-- USER CARD -->
     <div class="card" id="userCard" style="display:none;">
       <div class="user-row">
         <div>
@@ -44,9 +45,10 @@
       </div>
     </div>
 
-    <!-- MAIN APP CONTENT (hidden until user logged in) -->
+    <!-- MAIN APP CONTENT -->
     <div id="appContent" style="display:none;">
-      <!-- Stats Card -->
+
+      <!-- STATS -->
       <div class="card">
         <h2 class="section-title">Stats</h2>
         <div id="stats" class="stats-container">
@@ -54,49 +56,55 @@
         </div>
       </div>
 
-      <!-- Add Catch Form -->
+      <!-- ADD CATCH -->
       <div class="card">
         <h2 class="section-title">Add a catch</h2>
 
-        <label for="species">Species</label>
-        <input id="species" type="text" placeholder="Pike, Perch, Carp..." />
+        <label>Species</label>
+        <input id="species" type="text" placeholder="Pike, Trout, Perch...">
 
-        <label for="weight">Weight (kg)</label>
-        <input id="weight" type="number" step="0.01" placeholder="e.g. 2.4" />
+        <label>Weight (kg)</label>
+        <input id="weight" type="number" step="0.01" placeholder="2.4">
 
-        <label for="spot">Spot name</label>
-        <input id="spot" type="text" placeholder="Lake X, River Y..." />
+        <label>Spot name</label>
+        <input id="spot" type="text" placeholder="Lake X…">
 
-        <label for="notes">Notes (optional)</label>
-        <textarea id="notes" placeholder="Weather, lure, depth, etc."></textarea>
+        <label>Notes</label>
+        <textarea id="notes" placeholder="Weather, lure..."></textarea>
 
-        <label for="photo">Photo (optional)</label>
-        <input id="photo" type="file" accept="image/*" />
+        <label>Photo (optional)</label>
+        <input id="photo" type="file" accept="image/*">
 
         <button id="addCatchBtn">Save catch</button>
       </div>
 
-      <!-- List of catches -->
+      <!-- CATCH LIST -->
       <div class="card">
         <h2 class="section-title">Your catches</h2>
         <div id="catchList" class="catch-list">
-          <p class="empty-state">No catches yet. Add your first one!</p>
+          <p class="empty-state">No catches yet.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- All JS in one module script so we can use Firebase imports -->
+  <!-- 🔥 FIREBASE + APP LOGIC -->
   <script type="module">
-    // ---- IMPORT FIREBASE (from CDN) ----
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
-    import {
+
+    /* -------------------------------------------------------
+       IMPORT FIREBASE SDK
+    --------------------------------------------------------- */
+    import { initializeApp } 
+      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+
+    import { 
       getAuth,
       onAuthStateChanged,
       createUserWithEmailAndPassword,
       signInWithEmailAndPassword,
       signOut
-    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
     import {
       getFirestore,
       collection,
@@ -106,9 +114,12 @@
       where,
       deleteDoc,
       doc
-    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // ---- YOUR FIREBASE CONFIG (from your project) ----
+
+    /* -------------------------------------------------------
+       YOUR FIREBASE CONFIG (YOUR VALUES INSTALLED)
+    --------------------------------------------------------- */
     const firebaseConfig = {
       apiKey: "AIzaSyCXID74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -118,369 +129,179 @@
       appId: "1:1658087867882:web:e59ddd8f6353d190080e93"
     };
 
-    // ---- INITIALIZE FIREBASE ----
+
+    /* -------------------------------------------------------
+       INITIALIZE FIREBASE
+    --------------------------------------------------------- */
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    // ---- APP STATE ----
     let currentUser = null;
     let catches = [];
 
-    // ---- STATS RENDERING ----
-    function renderStats() {
-      const statsEl = document.getElementById("stats");
-      if (!statsEl) return;
+    /* -------------------------------------------------------
+       AUTH HANDLERS
+    --------------------------------------------------------- */
+    const emailEl = document.getElementById("authEmail");
+    const passEl  = document.getElementById("authPassword");
+    const msgEl   = document.getElementById("authMessage");
 
-      statsEl.innerHTML = "";
+    document.getElementById("loginBtn").onclick = async () => {
+      try {
+        await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
+      } catch (err) { msgEl.textContent = err.message; }
+    };
 
-      if (!currentUser || catches.length === 0) {
-        const p = document.createElement("p");
-        p.className = "empty-state";
-        p.textContent = currentUser
-          ? "No stats yet – add your first catch!"
-          : "Log in to see stats for your catches.";
-        statsEl.appendChild(p);
-        return;
-      }
+    document.getElementById("signupBtn").onclick = async () => {
+      try {
+        await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
+      } catch (err) { msgEl.textContent = err.message; }
+    };
 
-      const total = catches.length;
-      let biggest = catches[0];
-      let totalWeight = 0;
-      const speciesCounts = {};
+    document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-      catches.forEach(c => {
-        const w = typeof c.weightKg === "number" ? c.weightKg : 0;
-        totalWeight += w;
-        if (w > (biggest.weightKg || 0)) {
-          biggest = c;
-        }
-        if (c.species) {
-          speciesCounts[c.species] = (speciesCounts[c.species] || 0) + 1;
-        }
-      });
 
-      const avgWeight = totalWeight / total;
-      let topSpecies = null;
-      let topCount = 0;
-      for (const [species, count] of Object.entries(speciesCounts)) {
-        if (count > topCount) {
-          topCount = count;
-          topSpecies = species;
-        }
-      }
+    /* -------------------------------------------------------
+       AUTH STATE
+    --------------------------------------------------------- */
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
 
-      const list = document.createElement("div");
-      list.className = "stats";
+      if (user) {
+        document.getElementById("authCard").style.display = "none";
+        document.getElementById("userCard").style.display = "block";
+        document.getElementById("appContent").style.display = "block";
+        document.getElementById("userEmail").textContent = user.email;
 
-      function addStat(label, value) {
-        const item = document.createElement("div");
-        item.className = "stat-pill";
-        item.innerHTML = `
-          <span class="stat-label">${label}</span>
-          <span class="stat-value">${value}</span>
-        `;
-        list.appendChild(item);
-      }
+        await loadCatches();
 
-      addStat("Total", `${total} catch${total === 1 ? "" : "es"}`);
-      addStat("Biggest", `${biggest.weightKg.toFixed(2)} kg ${biggest.species}`);
-      addStat("Avg weight", `${avgWeight.toFixed(2)} kg`);
-      if (topSpecies) {
-        addStat("Most common", `${topSpecies} (${topCount})`);
-      }
-
-      statsEl.appendChild(list);
-    }
-
-    // ---- LOAD CATCHES FROM FIRESTORE ----
-    async function loadCatchesFromFirestore() {
-      if (!currentUser) {
+      } else {
+        document.getElementById("authCard").style.display = "block";
+        document.getElementById("userCard").style.display = "none";
+        document.getElementById("appContent").style.display = "none";
         catches = [];
         renderCatches();
-        return;
-      }
-
-      try {
-        const q = query(
-          collection(db, "catches"),
-          where("userId", "==", currentUser.uid)
-        );
-        const snapshot = await getDocs(q);
-        catches = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        }));
-        renderCatches();
-      } catch (err) {
-        console.error("Error loading catches:", err);
-        alert("Could not load catches (check console).");
-      }
-    }
-
-    // ---- ADD CATCH TO FIRESTORE ----
-    async function addCatchToFirestore(catchData) {
-      if (!currentUser) return;
-      try {
-        await addDoc(collection(db, "catches"), {
-          ...catchData,
-          userId: currentUser.uid
-        });
-        await loadCatchesFromFirestore();
-      } catch (err) {
-        console.error("Error saving catch:", err);
-        alert("Could not save catch (check console).");
-      }
-    }
-
-    // ---- DELETE CATCH FROM FIRESTORE ----
-    async function deleteCatchFromFirestore(id) {
-      if (!currentUser) return;
-      try {
-        await deleteDoc(doc(db, "catches", id));
-        await loadCatchesFromFirestore();
-      } catch (err) {
-        console.error("Error deleting catch:", err);
-        alert("Could not delete catch (check console).");
-      }
-    }
-
-    // ---- RENDER CATCHES ----
-    function renderCatches() {
-      const listEl = document.getElementById("catchList");
-      listEl.innerHTML = "";
-
-      if (!currentUser) {
-        const p = document.createElement("p");
-        p.className = "empty-state";
-        p.textContent = "Log in to see your catches.";
-        listEl.appendChild(p);
-        renderStats();
-        return;
-      }
-
-      if (catches.length === 0) {
-        const p = document.createElement("p");
-        p.className = "empty-state";
-        p.textContent = "No catches yet. Add your first one!";
-        listEl.appendChild(p);
-        renderStats();
-        return;
-      }
-
-      catches
-        .slice()
-        .reverse()
-        .forEach(c => {
-          const wrapper = document.createElement("div");
-          wrapper.className = "catch-item";
-
-          const top = document.createElement("div");
-          top.className = "catch-top";
-          top.innerHTML = `
-            <span>${c.species} • ${c.weightKg.toFixed(2)} kg</span>
-            <span>${new Date(c.timestamp).toLocaleDateString()}</span>
-          `;
-
-          const meta = document.createElement("div");
-          meta.className = "catch-meta";
-          meta.textContent = c.spotName || "Unknown spot";
-
-          const note = document.createElement("div");
-          note.className = "catch-meta";
-          note.textContent = c.notes || "";
-
-          wrapper.appendChild(top);
-          wrapper.appendChild(meta);
-          if (c.notes) wrapper.appendChild(note);
-
-          if (c.photoDataUrl) {
-            const img = document.createElement("img");
-            img.className = "catch-photo";
-            img.src = c.photoDataUrl;
-            img.alt = `${c.species} photo`;
-            wrapper.appendChild(img);
-          }
-
-          const actions = document.createElement("div");
-          actions.className = "catch-actions";
-
-          const deleteBtn = document.createElement("button");
-          deleteBtn.className = "delete-btn";
-          deleteBtn.textContent = "Delete";
-          deleteBtn.addEventListener("click", () => {
-            const confirmed = confirm("Delete this catch? This cannot be undone.");
-            if (confirmed) {
-              deleteCatchFromFirestore(c.id);
-            }
-          });
-
-          actions.appendChild(deleteBtn);
-          wrapper.appendChild(actions);
-
-          const separator = document.createElement("div");
-          separator.style.height = "12px";
-
-          listEl.appendChild(wrapper);
-          listEl.appendChild(separator);
-        });
-
-      renderStats();
-    }
-
-    // ---- FORM: ADD CATCH ----
-    const speciesInput = document.getElementById("species");
-    const weightInput = document.getElementById("weight");
-    const spotInput = document.getElementById("spot");
-    const notesInput = document.getElementById("notes");
-    const photoInput = document.getElementById("photo");
-    const addCatchBtn = document.getElementById("addCatchBtn");
-
-    function clearForm() {
-      speciesInput.value = "";
-      weightInput.value = "";
-      spotInput.value = "";
-      notesInput.value = "";
-      photoInput.value = "";
-    }
-
-    if (addCatchBtn) {
-      addCatchBtn.addEventListener("click", async () => {
-        if (!currentUser) {
-          alert("Please log in first.");
-          return;
-        }
-
-        const species = speciesInput.value.trim();
-        const weightValue = parseFloat(weightInput.value);
-        const spotValue = spotInput.value.trim();
-        const notesValue = notesInput.value.trim();
-        const file = photoInput.files[0];
-
-        if (!species || isNaN(weightValue)) {
-          alert("Please enter at least species and weight.");
-          return;
-        }
-
-        const baseCatch = {
-          species,
-          weightKg: weightValue,
-          spotName: spotValue,
-          notes: notesValue,
-          timestamp: Date.now(),
-          photoDataUrl: null
-        };
-
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = async (event) => {
-            baseCatch.photoDataUrl = event.target.result;
-            await addCatchToFirestore(baseCatch);
-            clearForm();
-          };
-          reader.readAsDataURL(file);
-        } else {
-          await addCatchToFirestore(baseCatch);
-          clearForm();
-        }
-      });
-    }
-
-    // ---- AUTH UI ELEMENTS ----
-    const authCard = document.getElementById("authCard");
-    const userCard = document.getElementById("userCard");
-    const appContent = document.getElementById("appContent");
-    const authEmail = document.getElementById("authEmail");
-    const authPassword = document.getElementById("authPassword");
-    const authMessage = document.getElementById("authMessage");
-    const loginBtn = document.getElementById("loginBtn");
-    const signupBtn = document.getElementById("signupBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const userEmailEl = document.getElementById("userEmail");
-
-    function setAuthMessage(text) {
-      authMessage.textContent = text || "";
-    }
-
-    function setLoggedInUI(user) {
-      authCard.style.display = "none";
-      userCard.style.display = "block";
-      appContent.style.display = "block";
-      userEmailEl.textContent = user.email || user.uid;
-    }
-
-    function setLoggedOutUI() {
-      authCard.style.display = "block";
-      userCard.style.display = "none";
-      appContent.style.display = "none";
-      userEmailEl.textContent = "";
-      catches = [];
-      renderCatches();
-    }
-
-    // ---- AUTH EVENT HANDLERS ----
-    if (loginBtn) {
-      loginBtn.addEventListener("click", async () => {
-        const email = authEmail.value.trim();
-        const password = authPassword.value.trim();
-        if (!email || !password) {
-          setAuthMessage("Please enter email and password.");
-          return;
-        }
-        setAuthMessage("Logging in...");
-        try {
-          await signInWithEmailAndPassword(auth, email, password);
-          setAuthMessage("");
-        } catch (err) {
-          console.error(err);
-          setAuthMessage(err.message);
-        }
-      });
-    }
-
-    if (signupBtn) {
-      signupBtn.addEventListener("click", async () => {
-        const email = authEmail.value.trim();
-        const password = authPassword.value.trim();
-        if (!email || !password) {
-          setAuthMessage("Please enter email and password.");
-          return;
-        }
-        setAuthMessage("Creating account...");
-        try {
-          await createUserWithEmailAndPassword(auth, email, password);
-          setAuthMessage("Account created! You are now logged in.");
-        } catch (err) {
-          console.error(err);
-          setAuthMessage(err.message);
-        }
-      });
-    }
-
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", async () => {
-        try {
-          await signOut(auth);
-        } catch (err) {
-          console.error(err);
-          alert("Error logging out");
-        }
-      });
-    }
-
-    // ---- AUTH STATE LISTENER ----
-    onAuthStateChanged(auth, async (user) => {
-      currentUser = user || null;
-      if (currentUser) {
-        setLoggedInUI(currentUser);
-        await loadCatchesFromFirestore();
-      } else {
-        setLoggedOutUI();
       }
     });
 
-    // Initial render
-    renderCatches();
+
+    /* -------------------------------------------------------
+       FIRESTORE OPERATIONS
+    --------------------------------------------------------- */
+    async function loadCatches() {
+      if (!currentUser) return;
+
+      const q = query(
+        collection(db, "catches"),
+        where("userId", "==", currentUser.uid)
+      );
+
+      const snap = await getDocs(q);
+      catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      renderCatches();
+    }
+
+    async function saveCatch(c) {
+      await addDoc(collection(db, "catches"), {
+        ...c,
+        userId: currentUser.uid
+      });
+      await loadCatches();
+    }
+
+    async function deleteCatch(id) {
+      await deleteDoc(doc(db, "catches", id));
+      await loadCatches();
+    }
+
+
+    /* -------------------------------------------------------
+       ADD CATCH BUTTON
+    --------------------------------------------------------- */
+    document.getElementById("addCatchBtn").onclick = async () => {
+      if (!currentUser) return alert("Please log in");
+
+      const species = document.getElementById("species").value;
+      const weight  = parseFloat(document.getElementById("weight").value);
+      const spot    = document.getElementById("spot").value;
+      const notes   = document.getElementById("notes").value;
+      const file    = document.getElementById("photo").files[0];
+
+      if (!species || isNaN(weight)) {
+        alert("Species and weight are required.");
+        return;
+      }
+
+      const data = {
+        species,
+        weightKg: weight,
+        spotName: spot,
+        notes,
+        timestamp: Date.now(),
+        photoDataUrl: null
+      };
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          data.photoDataUrl = e.target.result;
+          await saveCatch(data);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        await saveCatch(data);
+      }
+    };
+
+
+    /* -------------------------------------------------------
+       RENDER CATCHES
+    --------------------------------------------------------- */
+    function renderCatches() {
+      const list = document.getElementById("catchList");
+      list.innerHTML = "";
+
+      if (!catches.length) {
+        list.innerHTML = `<p class="empty-state">No catches yet.</p>`;
+        return;
+      }
+
+      catches.slice().reverse().forEach(c => {
+        const div = document.createElement("div");
+        div.className = "catch-item";
+        div.innerHTML = `
+          <div class="catch-top">
+            <span>${c.species} • ${c.weightKg} kg</span>
+            <span>${new Date(c.timestamp).toLocaleDateString()}</span>
+          </div>
+          <div class="catch-meta">${c.spotName || ""}</div>
+          <div class="catch-meta">${c.notes || ""}</div>
+        `;
+
+        if (c.photoDataUrl) {
+          const img = document.createElement("img");
+          img.className = "catch-photo";
+          img.src = c.photoDataUrl;
+          div.appendChild(img);
+        }
+
+        const del = document.createElement("button");
+        del.className = "delete-btn";
+        del.textContent = "Delete";
+        del.onclick = () => deleteCatch(c.id);
+
+        const actions = document.createElement("div");
+        actions.className = "catch-actions";
+        actions.appendChild(del);
+
+        div.appendChild(actions);
+        list.appendChild(div);
+      });
+    }
+
   </script>
+
 </body>
 </html>
