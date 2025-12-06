@@ -12,53 +12,120 @@
   <div class="app">
     <header>
       <h1>My Fishing Log</h1>
-      <p>Track your catches anywhere – works on mobile too.</p>
+      <p>Track your catches anywhere – now with login.</p>
     </header>
 
-    <!-- Stats Card -->
-    <div class="card">
-      <h2 class="section-title">Stats</h2>
-      <div id="stats" class="stats-container">
-        <p class="empty-state">No stats yet – add your first catch!</p>
+    <!-- AUTH CARD (shown when logged out) -->
+    <div class="card" id="authCard">
+      <h2 class="section-title">Log in or sign up</h2>
+
+      <label for="authEmail">Email</label>
+      <input id="authEmail" type="email" placeholder="you@example.com" />
+
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" placeholder="Choose a password" />
+
+      <div class="auth-buttons">
+        <button id="loginBtn">Log in</button>
+        <button id="signupBtn" class="secondary-btn">Sign up</button>
+      </div>
+
+      <p id="authMessage" class="auth-message"></p>
+    </div>
+
+    <!-- USER CARD (shown when logged in) -->
+    <div class="card" id="userCard" style="display:none;">
+      <div class="user-row">
+        <div>
+          <div class="user-label">Logged in as</div>
+          <div class="user-email" id="userEmail"></div>
+        </div>
+        <button id="logoutBtn" class="secondary-btn">Log out</button>
       </div>
     </div>
 
-    <!-- Add Catch Form -->
-    <div class="card">
-      <h2 class="section-title">Add a catch</h2>
+    <!-- MAIN APP CONTENT (hidden until user logged in) -->
+    <div id="appContent" style="display:none;">
+      <!-- Stats Card -->
+      <div class="card">
+        <h2 class="section-title">Stats</h2>
+        <div id="stats" class="stats-container">
+          <p class="empty-state">No stats yet – add your first catch!</p>
+        </div>
+      </div>
 
-      <label for="species">Species</label>
-      <input id="species" type="text" placeholder="Pike, Perch, Carp..." />
+      <!-- Add Catch Form -->
+      <div class="card">
+        <h2 class="section-title">Add a catch</h2>
 
-      <label for="weight">Weight (kg)</label>
-      <input id="weight" type="number" step="0.01" placeholder="e.g. 2.4" />
+        <label for="species">Species</label>
+        <input id="species" type="text" placeholder="Pike, Perch, Carp..." />
 
-      <label for="spot">Spot name</label>
-      <input id="spot" type="text" placeholder="Lake X, River Y..." />
+        <label for="weight">Weight (kg)</label>
+        <input id="weight" type="number" step="0.01" placeholder="e.g. 2.4" />
 
-      <label for="notes">Notes (optional)</label>
-      <textarea id="notes" placeholder="Weather, lure, depth, etc."></textarea>
+        <label for="spot">Spot name</label>
+        <input id="spot" type="text" placeholder="Lake X, River Y..." />
 
-      <label for="photo">Photo (optional)</label>
-      <input id="photo" type="file" accept="image/*" />
+        <label for="notes">Notes (optional)</label>
+        <textarea id="notes" placeholder="Weather, lure, depth, etc."></textarea>
 
-      <button id="addCatchBtn">Save catch</button>
-    </div>
+        <label for="photo">Photo (optional)</label>
+        <input id="photo" type="file" accept="image/*" />
 
-    <!-- List of catches -->
-    <div class="card">
-      <h2 class="section-title">Your catches</h2>
-      <div id="catchList" class="catch-list">
-        <p class="empty-state">No catches yet. Add your first one!</p>
+        <button id="addCatchBtn">Save catch</button>
+      </div>
+
+      <!-- List of catches -->
+      <div class="card">
+        <h2 class="section-title">Your catches</h2>
+        <div id="catchList" class="catch-list">
+          <p class="empty-state">No catches yet. Add your first one!</p>
+        </div>
       </div>
     </div>
   </div>
 
-  <script>
-    // --- Data handling ---
+  <!-- All JS in one module script so we can use Firebase imports -->
+  <script type="module">
+    // ---- IMPORT FIREBASE (from CDN) ----
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import {
+      getAuth,
+      onAuthStateChanged,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
 
+    // ---- YOUR FIREBASE CONFIG (from your screenshot) ----
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXID74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1658087867882",
+      appId: "1:1658087867882:web:e59ddd8f6353d190080e93"
+      // measurementId is optional; not needed here
+    };
+
+    // ---- INITIALIZE FIREBASE ----
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    // ---- APP STATE ----
+    let currentUser = null;
+    let catches = [];
+
+    function storageKeyForUser(uid) {
+      return `fishing_catches_${uid}`;
+    }
+
+    // Load from localStorage for current user
     function loadCatches() {
-      const json = localStorage.getItem("fishing_catches");
+      if (!currentUser) return [];
+      const key = storageKeyForUser(currentUser.uid);
+      const json = localStorage.getItem(key);
       if (!json) return [];
       try {
         return JSON.parse(json);
@@ -68,35 +135,26 @@
       }
     }
 
-    function saveCatches(catches) {
-      localStorage.setItem("fishing_catches", JSON.stringify(catches));
+    // Save to localStorage for current user
+    function saveCatches(catchesArray) {
+      if (!currentUser) return;
+      const key = storageKeyForUser(currentUser.uid);
+      localStorage.setItem(key, JSON.stringify(catchesArray));
     }
 
-    let catches = loadCatches();
-
-    // --- Delete a catch ---
-
-    function deleteCatch(id) {
-      const confirmed = confirm("Delete this catch? This cannot be undone.");
-      if (!confirmed) return;
-
-      catches = catches.filter(c => c.id !== id);
-      saveCatches(catches);
-      renderCatches();
-    }
-
-    // --- Stats rendering ---
-
+    // ---- STATS RENDERING ----
     function renderStats() {
       const statsEl = document.getElementById("stats");
       if (!statsEl) return;
 
       statsEl.innerHTML = "";
 
-      if (catches.length === 0) {
+      if (!currentUser || catches.length === 0) {
         const p = document.createElement("p");
         p.className = "empty-state";
-        p.textContent = "No stats yet – add your first catch!";
+        p.textContent = currentUser
+          ? "No stats yet – add your first catch!"
+          : "Log in to see stats for your catches.";
         statsEl.appendChild(p);
         return;
       }
@@ -150,25 +208,32 @@
       statsEl.appendChild(list);
     }
 
-    // --- Rendering catches ---
-
+    // ---- CATCHES RENDERING ----
     function renderCatches() {
       const listEl = document.getElementById("catchList");
       listEl.innerHTML = "";
 
-      if (catches.length === 0) {
+      if (!currentUser) {
         const p = document.createElement("p");
         p.className = "empty-state";
+        p.textContent = "Log in to see your catches.";
+        listEl.appendChild(p);
+        renderStats();
+        return;
+      }
+
+      if (catches.length === 0) {
+        const p = document.createElement("p");
+          p.className = "empty-state";
         p.textContent = "No catches yet. Add your first one!";
         listEl.appendChild(p);
-        // Also update stats
         renderStats();
         return;
       }
 
       catches
         .slice()
-        .reverse() // newest first
+        .reverse()
         .forEach(c => {
           const wrapper = document.createElement("div");
           wrapper.className = "catch-item";
@@ -218,63 +283,172 @@
           listEl.appendChild(separator);
         });
 
-      // Update stats whenever the catch list changes
       renderStats();
     }
 
-    // --- Save Catch ---
+    // ---- DELETE CATCH ----
+    function deleteCatch(id) {
+      const confirmed = confirm("Delete this catch? This cannot be undone.");
+      if (!confirmed) return;
 
-    document.getElementById("addCatchBtn").addEventListener("click", () => {
-      const speciesInput = document.getElementById("species");
-      const weightInput = document.getElementById("weight");
-      const spotInput = document.getElementById("spot");
-      const notesInput = document.getElementById("notes");
-      const photoInput = document.getElementById("photo");
+      catches = catches.filter(c => c.id !== id);
+      saveCatches(catches);
+      renderCatches();
+    }
 
-      const species = speciesInput.value.trim();
-      const weightValue = parseFloat(weightInput.value);
-      const spotValue = spotInput.value.trim();
-      const notesValue = notesInput.value.trim();
-      const file = photoInput.files[0];
+    // ---- FORM: ADD CATCH ----
+    const speciesInput = document.getElementById("species");
+    const weightInput = document.getElementById("weight");
+    const spotInput = document.getElementById("spot");
+    const notesInput = document.getElementById("notes");
+    const photoInput = document.getElementById("photo");
+    const addCatchBtn = document.getElementById("addCatchBtn");
 
-      if (!species || isNaN(weightValue)) {
-        alert("Please enter at least species and weight.");
-        return;
-      }
+    if (addCatchBtn) {
+      addCatchBtn.addEventListener("click", () => {
+        if (!currentUser) {
+          alert("Please log in first.");
+          return;
+        }
 
-      const createCatch = (photoDataUrl) => {
-        const newCatch = {
-          id: Date.now(),
-          species,
-          weightKg: weightValue,
-          spotName: spotValue,
-          notes: notesValue,
-          timestamp: Date.now(),
-          photoDataUrl
+        const species = speciesInput.value.trim();
+        const weightValue = parseFloat(weightInput.value);
+        const spotValue = spotInput.value.trim();
+        const notesValue = notesInput.value.trim();
+        const file = photoInput.files[0];
+
+        if (!species || isNaN(weightValue)) {
+          alert("Please enter at least species and weight.");
+          return;
+        }
+
+        const createCatch = (photoDataUrl) => {
+          const newCatch = {
+            id: Date.now(),
+            species,
+            weightKg: weightValue,
+            spotName: spotValue,
+            notes: notesValue,
+            timestamp: Date.now(),
+            photoDataUrl
+          };
+
+          catches.push(newCatch);
+          saveCatches(catches);
+          renderCatches();
+
+          speciesInput.value = "";
+          weightInput.value = "";
+          spotInput.value = "";
+          notesInput.value = "";
+          photoInput.value = "";
         };
 
-        catches.push(newCatch);
-        saveCatches(catches);
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => createCatch(event.target.result);
+          reader.readAsDataURL(file);
+        } else {
+          createCatch(null);
+        }
+      });
+    }
+
+    // ---- AUTH UI ELEMENTS ----
+    const authCard = document.getElementById("authCard");
+    const userCard = document.getElementById("userCard");
+    const appContent = document.getElementById("appContent");
+    const authEmail = document.getElementById("authEmail");
+    const authPassword = document.getElementById("authPassword");
+    const authMessage = document.getElementById("authMessage");
+    const loginBtn = document.getElementById("loginBtn");
+    const signupBtn = document.getElementById("signupBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const userEmailEl = document.getElementById("userEmail");
+
+    function setAuthMessage(text) {
+      authMessage.textContent = text || "";
+    }
+
+    function setLoggedInUI(user) {
+      authCard.style.display = "none";
+      userCard.style.display = "block";
+      appContent.style.display = "block";
+      userEmailEl.textContent = user.email || user.uid;
+    }
+
+    function setLoggedOutUI() {
+      authCard.style.display = "block";
+      userCard.style.display = "none";
+      appContent.style.display = "none";
+      userEmailEl.textContent = "";
+      catches = [];
+      renderCatches(); // will show "log in" / empty state
+    }
+
+    // ---- AUTH EVENT HANDLERS ----
+    if (loginBtn) {
+      loginBtn.addEventListener("click", async () => {
+        const email = authEmail.value.trim();
+        const password = authPassword.value.trim();
+        if (!email || !password) {
+          setAuthMessage("Please enter email and password.");
+          return;
+        }
+        setAuthMessage("Logging in...");
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+          setAuthMessage("");
+        } catch (err) {
+          console.error(err);
+          setAuthMessage(err.message);
+        }
+      });
+    }
+
+    if (signupBtn) {
+      signupBtn.addEventListener("click", async () => {
+        const email = authEmail.value.trim();
+        const password = authPassword.value.trim();
+        if (!email || !password) {
+          setAuthMessage("Please enter email and password.");
+          return;
+        }
+        setAuthMessage("Creating account...");
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+          setAuthMessage("Account created! You are now logged in.");
+        } catch (err) {
+          console.error(err);
+          setAuthMessage(err.message);
+        }
+      });
+    }
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", async () => {
+        try {
+          await signOut(auth);
+        } catch (err) {
+          console.error(err);
+          alert("Error logging out");
+        }
+      });
+    }
+
+    // ---- AUTH STATE LISTENER ----
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user || null;
+      if (currentUser) {
+        setLoggedInUI(currentUser);
+        catches = loadCatches();
         renderCatches();
-
-        // clear form
-        speciesInput.value = "";
-        weightInput.value = "";
-        spotInput.value = "";
-        notesInput.value = "";
-        photoInput.value = "";
-      };
-
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => createCatch(event.target.result);
-        reader.readAsDataURL(file);
       } else {
-        createCatch(null);
+        setLoggedOutUI();
       }
     });
 
-    // Initial render
+    // Initial render (not logged in)
     renderCatches();
   </script>
 </body>
