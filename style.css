@@ -53,7 +53,8 @@ label {
   margin-bottom: 4px;
 }
 
-input, textarea {
+input,
+textarea {
   width: 100%;
   padding: 8px 10px;
   margin-bottom: 10px;
@@ -70,7 +71,6 @@ textarea {
 }
 
 button {
-  width: 100%;
   padding: 10px;
   border-radius: 999px;
   border: none;
@@ -87,6 +87,11 @@ button:active {
   box-shadow: 0 2px 6px rgba(31,139,253,0.4);
 }
 
+/* Main save button */
+#addCatchBtn {
+  width: 100%;
+}
+
 .catch-list {
   margin-top: 16px;
 }
@@ -94,7 +99,7 @@ button:active {
 .catch-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   font-size: 0.95rem;
 }
 
@@ -121,4 +126,23 @@ button:active {
   max-width: 100%;
   border-radius: 8px;
   display: block;
+}
+
+/* Actions row (for delete) */
+.catch-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* Smaller red delete button */
+.delete-btn {
+  background: #d9534f;
+  box-shadow: 0 3px 8px rgba(217, 83, 79, 0.4);
+  font-size: 0.85rem;
+  padding: 6px 14px;
+}
+
+.delete-btn:active {
+  box-shadow: 0 1px 4px rgba(217, 83, 79, 0.4);
 }
