@@ -92,6 +92,49 @@ button:active {
   width: 100%;
 }
 
+/* Auth UI */
+.auth-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.secondary-btn {
+  background: transparent;
+  color: #1f8bfd;
+  border: 1px solid #1f8bfd;
+  box-shadow: none;
+}
+
+.secondary-btn:active {
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+
+.auth-message {
+  font-size: 0.8rem;
+  margin-top: 4px;
+  min-height: 1.2em;
+}
+
+/* Logged-in user bar */
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-label {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.user-email {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Catch list */
 .catch-list {
   margin-top: 16px;
 }
