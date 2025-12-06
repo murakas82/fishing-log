@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Your Catches – My Fishing Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <h1>Your Catches</h1>
+      <p>All catches for your account.</p>
+    </header>
+
+    <div class="card" id="needLogin" style="display:none;">
+      <p>You need to be logged in to see your catches.</p>
+      <button id="goLoginBtn">Back to main page</button>
+    </div>
+
+    <div class="card" id="catchesCard" style="display:none;">
+      <p style="font-size:0.9rem; margin-bottom:10px;">
+        Logged in as <span id="userEmail"></span>
+      </p>
+
+      <div id="catchList" class="catch-list">
+        <p class="empty-state">Loading catches…</p>
+      </div>
+
+      <button id="backBtn" class="secondary-btn" style="margin-top:8px;">
+        Back to main page
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+
+    import {
+      getAuth, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    import {
+      getFirestore, collection, getDocs, query, where, deleteDoc, doc
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    const needLogin  = document.getElementById("needLogin");
+    const card       = document.getElementById("catchesCard");
+    const listEl     = document.getElementById("catchList");
+    const userEmailEl = document.getElementById("userEmail");
+
+    document.getElementById("backBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+    document.getElementById("goLoginBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        needLogin.style.display = "block";
+        card.style.display      = "none";
+        return;
+      }
+
+      needLogin.style.display = "none";
+      card.style.display      = "block";
+      userEmailEl.textContent = user.email;
+
+      await loadCatches(user.uid);
+    });
+
+    async function loadCatches(uid) {
+      const q = query(
+        collection(db, "catches"),
+        where("userId", "==", uid)
+      );
+      const snap = await getDocs(q);
+      const catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderCatches(catches);
+    }
+
+    async function deleteCatch(id, uid) {
+      await deleteDoc(doc(db, "catches", id));
+      await loadCatches(uid);
+    }
+
+    function renderCatches(catches) {
+      listEl.innerHTML = "";
+
+      if (!catches.length) {
+        listEl.innerHTML = `<p class="empty-state">You have no catches yet.</p>`;
+        return;
+      }
+
+      catches.slice().reverse().forEach(c => {
+        const div = document.createElement("div");
+        div.className = "catch-item";
+
+        div.innerHTML = `
+          <div class="catch-top">
+            <span>${c.species} • ${c.weightKg} kg</span>
+            <span>${new Date(c.timestamp).toLocaleDateString()}</span>
+          </div>
+          <div class="catch-meta">Spot: ${c.spotName || "-"}</div>
+          <div class="catch-meta">Lure: ${c.lure || "-"}</div>
+          <div class="catch-meta">Depth: ${c.depth || "-"} m</div>
+          <div class="catch-meta">Water temp: ${c.temperature || "-"} °C</div>
+          <div class="catch-notes">${c.notes || ""}</div>
+        `;
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "delete-btn";
+        delBtn.textContent = "Delete";
+        delBtn.onclick = () => {
+          const uid = auth.currentUser?.uid;
+          if (!uid) return;
+          deleteCatch(c.id, uid);
+        };
+
+        div.appendChild(delBtn);
+        listEl.appendChild(div);
+      });
+    }
+  </script>
+</body>
+</html>
