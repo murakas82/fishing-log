@@ -44,7 +44,7 @@
       </div>
     </div>
 
-    <!-- MAIN CONTENT: stats + navigation -->
+    <!-- MAIN CONTENT: stats + two blue bubbles -->
     <div id="appContent" style="display:none;">
 
       <!-- STATS -->
@@ -55,22 +55,14 @@
         </div>
       </div>
 
-      <!-- ADD CATCH NAV -->
+      <!-- ADD CATCH BUBBLE -->
       <div class="card">
-        <h2 class="section-title">Add catch</h2>
-        <p style="margin-bottom: 8px; font-size: 0.9rem;">
-          Go to the catch form page to enter a new catch.
-        </p>
-        <button id="goAddCatchBtn">Go to Add Catch page</button>
+        <button id="goAddCatchBtn" class="nav-pill">Add catch</button>
       </div>
 
-      <!-- YOUR CATCHES NAV -->
+      <!-- YOUR CATCHES BUBBLE -->
       <div class="card">
-        <h2 class="section-title">Your catches</h2>
-        <p style="margin-bottom: 8px; font-size: 0.9rem;">
-          View all your catches on a separate page.
-        </p>
-        <button id="goCatchesBtn">Go to Your Catches</button>
+        <button id="goCatchesBtn" class="nav-pill">Your catches</button>
       </div>
     </div>
   </div>
@@ -92,7 +84,7 @@
       query, where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // --- YOUR FIREBASE CONFIG (from screenshot) ---
+    // --- YOUR FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -134,7 +126,7 @@
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-    // navigation buttons
+    // navigation buttons -> other pages
     document.getElementById("goAddCatchBtn").onclick = () => {
       window.location.href = "add-catch.html";
     };
@@ -161,7 +153,7 @@
       }
     });
 
-    // --- LOAD CATCHES (ONLY FOR STATS ON MAIN PAGE) ---
+    // --- LOAD CATCHES (FOR STATS) ---
     async function loadCatchesForStats() {
       if (!currentUser) return;
 
