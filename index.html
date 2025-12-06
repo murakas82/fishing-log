@@ -5,23 +5,23 @@
   <title>My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <link rel="stylesheet" href="style.css">
-
+  <!-- Speed up Firebase loading -->
   <link rel="preconnect" href="https://www.gstatic.com">
-<link rel="preconnect" href="https://www.googleapis.com">
+  <link rel="preconnect" href="https://www.googleapis.com">
 
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-  <div class="app">
+  <div class="app fade-in">
     <header>
       <h1>My Fishing Log</h1>
       <p>Track your catches anywhere – with login & cloud sync.</p>
     </header>
 
-    <!-- LOADING CARD: shown first, hides flicker -->
-    <div class="card" id="loadingCard">
-      <p>Loading...</p>
+    <!-- LOADING SPINNER: shown first, hides flicker -->
+    <div id="loadingCard" class="loading-spinner-wrapper">
+      <div class="loading-spinner"></div>
     </div>
 
     <!-- AUTH CARD (hidden until we know user is logged out) -->
@@ -93,7 +93,7 @@
       query, where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // --- YOUR FIREBASE CONFIG (from Firebase console) ---
+    // --- YOUR FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -150,7 +150,7 @@
       window.location.href = "catches.html";
     };
 
-    // --- AUTH STATE HANDLER (removes flicker) ---
+    // --- AUTH STATE HANDLER (no flicker) ---
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
 
@@ -227,4 +227,3 @@
   </script>
 </body>
 </html>
-
