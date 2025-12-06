@@ -44,7 +44,7 @@
       </div>
     </div>
 
-    <!-- MAIN APP CONTENT: STATS + ADD CATCH + LIST -->
+    <!-- MAIN CONTENT: stats + navigation -->
     <div id="appContent" style="display:none;">
 
       <!-- STATS -->
@@ -55,21 +55,22 @@
         </div>
       </div>
 
-      <!-- ADD CATCH BUTTON -->
+      <!-- ADD CATCH NAV -->
       <div class="card">
-        <h2 class="section-title">Add a catch</h2>
+        <h2 class="section-title">Add catch</h2>
         <p style="margin-bottom: 8px; font-size: 0.9rem;">
           Go to the catch form page to enter a new catch.
         </p>
         <button id="goAddCatchBtn">Go to Add Catch page</button>
       </div>
 
-      <!-- CATCH LIST -->
+      <!-- YOUR CATCHES NAV -->
       <div class="card">
         <h2 class="section-title">Your catches</h2>
-        <div id="catchList" class="catch-list">
-          <p class="empty-state">No catches yet.</p>
-        </div>
+        <p style="margin-bottom: 8px; font-size: 0.9rem;">
+          View all your catches on a separate page.
+        </p>
+        <button id="goCatchesBtn">Go to Your Catches</button>
       </div>
     </div>
   </div>
@@ -88,10 +89,10 @@
 
     import {
       getFirestore, collection, getDocs,
-      query, where, deleteDoc, doc
+      query, where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // --- YOUR FIREBASE CONFIG (from your project) ---
+    // --- YOUR FIREBASE CONFIG (from screenshot) ---
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -133,9 +134,12 @@
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-    // Go to Add Catch page
+    // navigation buttons
     document.getElementById("goAddCatchBtn").onclick = () => {
       window.location.href = "add-catch.html";
+    };
+    document.getElementById("goCatchesBtn").onclick = () => {
+      window.location.href = "catches.html";
     };
 
     // --- AUTH STATE HANDLER ---
@@ -147,18 +151,18 @@
         document.getElementById("userCard").style.display   = "block";
         document.getElementById("appContent").style.display = "block";
         document.getElementById("userEmail").textContent    = user.email;
-        await loadCatches();
+        await loadCatchesForStats();
       } else {
         document.getElementById("authCard").style.display   = "block";
         document.getElementById("userCard").style.display   = "none";
         document.getElementById("appContent").style.display = "none";
         catches = [];
-        renderCatches();
+        renderStats();
       }
     });
 
-    // --- LOAD CATCHES FROM FIRESTORE ---
-    async function loadCatches() {
+    // --- LOAD CATCHES (ONLY FOR STATS ON MAIN PAGE) ---
+    async function loadCatchesForStats() {
       if (!currentUser) return;
 
       const q = query(
@@ -167,50 +171,7 @@
       );
       const snap = await getDocs(q);
       catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderCatches();
       renderStats();
-    }
-
-    // --- DELETE CATCH ---
-    async function deleteCatch(id) {
-      await deleteDoc(doc(db, "catches", id));
-      await loadCatches();
-    }
-
-    // --- RENDER CATCH LIST ---
-    function renderCatches() {
-      const list = document.getElementById("catchList");
-      list.innerHTML = "";
-
-      if (!catches.length) {
-        list.innerHTML = `<p class="empty-state">No catches yet.</p>`;
-        return;
-      }
-
-      catches.slice().reverse().forEach(c => {
-        const div = document.createElement("div");
-        div.className = "catch-item";
-
-        div.innerHTML = `
-          <div class="catch-top">
-            <span>${c.species} • ${c.weightKg} kg</span>
-            <span>${new Date(c.timestamp).toLocaleDateString()}</span>
-          </div>
-          <div class="catch-meta">Spot: ${c.spotName || "-"}</div>
-          <div class="catch-meta">Lure: ${c.lure || "-"}</div>
-          <div class="catch-meta">Depth: ${c.depth || "-"} m</div>
-          <div class="catch-meta">Water temp: ${c.temperature || "-"} °C</div>
-          <div class="catch-notes">${c.notes || ""}</div>
-        `;
-
-        const delBtn = document.createElement("button");
-        delBtn.className = "delete-btn";
-        delBtn.textContent = "Delete";
-        delBtn.onclick = () => deleteCatch(c.id);
-
-        div.appendChild(delBtn);
-        list.appendChild(div);
-      });
     }
 
     // --- RENDER STATS ---
@@ -252,7 +213,6 @@
 
       statsEl.appendChild(container);
     }
-
   </script>
 </body>
 </html>
