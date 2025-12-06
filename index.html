@@ -116,19 +116,17 @@
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
     /*****************************************************
-     * 2. YOUR FIREBASE CONFIG
-     *    👉 YOU MUST REPLACE THE PLACEHOLDER OBJECT
-     *       WITH THE ONE FROM FIREBASE CONSOLE
+     * 2. YOUR FIREBASE CONFIG (from your screenshot)
      *****************************************************/
-const firebaseConfig = {
-    apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
-    authDomain: "fishing-log-app-murx.firebaseapp.com",
-    projectId: "fishing-log-app-murx",
-    storageBucket: "fishing-log-app-murx.firebasestorage.app",
-    messagingSenderId: "1056807867882",
-    appId: "1:1056807867882:web:e59ddd8f6353d190080e93",
-    measurementId: "G-J3EXD002RP"
-  };
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1656807867882",
+      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+      // measurementId is optional and not needed here
+    };
 
     /*****************************************************
      * 3. INITIALIZE FIREBASE
@@ -151,6 +149,7 @@ const firebaseConfig = {
       try {
         await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
       } catch (err) {
+        console.error(err);
         msgEl.textContent = err.message;
       }
     };
@@ -159,6 +158,7 @@ const firebaseConfig = {
       try {
         await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
       } catch (err) {
+        console.error(err);
         msgEl.textContent = err.message;
       }
     };
@@ -297,4 +297,3 @@ const firebaseConfig = {
   </script>
 </body>
 </html>
-
