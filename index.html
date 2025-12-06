@@ -90,14 +90,13 @@
 
   <!-- 🔥 FIREBASE + APP LOGIC -->
   <script type="module">
-
-    /* -------------------------------------------------------
-       IMPORT FIREBASE SDK
-    --------------------------------------------------------- */
-    import { initializeApp } 
+    /*****************************************************
+     * 1. IMPORT FIREBASE SDK (from CDN)
+     *****************************************************/
+    import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 
-    import { 
+    import {
       getAuth,
       onAuthStateChanged,
       createUserWithEmailAndPassword,
@@ -116,23 +115,23 @@
       doc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-
-    /* -------------------------------------------------------
-       YOUR FIREBASE CONFIG (YOUR VALUES INSTALLED)
-    --------------------------------------------------------- */
+    /*****************************************************
+     * 2. YOUR FIREBASE CONFIG
+     *    👉 YOU MUST REPLACE THE PLACEHOLDER OBJECT
+     *       WITH THE ONE FROM FIREBASE CONSOLE
+     *****************************************************/
     const firebaseConfig = {
-      apiKey: "AIzaSyCXID74cNDSVIoMs3NZ86tPf2kzFm8Iug",
-      authDomain: "fishing-log-app-murx.firebaseapp.com",
-      projectId: "fishing-log-app-murx",
-      storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1658087867882",
-      appId: "1:1658087867882:web:e59ddd8f6353d190080e93"
+      apiKey: "YOUR_API_KEY_HERE",
+      authDomain: "YOUR_AUTH_DOMAIN_HERE",
+      projectId: "YOUR_PROJECT_ID_HERE",
+      storageBucket: "YOUR_STORAGE_BUCKET_HERE",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID_HERE",
+      appId: "YOUR_APP_ID_HERE"
     };
 
-
-    /* -------------------------------------------------------
-       INITIALIZE FIREBASE
-    --------------------------------------------------------- */
+    /*****************************************************
+     * 3. INITIALIZE FIREBASE
+     *****************************************************/
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -140,9 +139,9 @@
     let currentUser = null;
     let catches = [];
 
-    /* -------------------------------------------------------
-       AUTH HANDLERS
-    --------------------------------------------------------- */
+    /*****************************************************
+     * 4. AUTH HANDLERS
+     *****************************************************/
     const emailEl = document.getElementById("authEmail");
     const passEl  = document.getElementById("authPassword");
     const msgEl   = document.getElementById("authMessage");
@@ -150,21 +149,24 @@
     document.getElementById("loginBtn").onclick = async () => {
       try {
         await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) { msgEl.textContent = err.message; }
+      } catch (err) {
+        msgEl.textContent = err.message;
+      }
     };
 
     document.getElementById("signupBtn").onclick = async () => {
       try {
         await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) { msgEl.textContent = err.message; }
+      } catch (err) {
+        msgEl.textContent = err.message;
+      }
     };
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-
-    /* -------------------------------------------------------
-       AUTH STATE
-    --------------------------------------------------------- */
+    /*****************************************************
+     * 5. AUTH STATE
+     *****************************************************/
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
 
@@ -173,9 +175,7 @@
         document.getElementById("userCard").style.display = "block";
         document.getElementById("appContent").style.display = "block";
         document.getElementById("userEmail").textContent = user.email;
-
         await loadCatches();
-
       } else {
         document.getElementById("authCard").style.display = "block";
         document.getElementById("userCard").style.display = "none";
@@ -185,10 +185,9 @@
       }
     });
 
-
-    /* -------------------------------------------------------
-       FIRESTORE OPERATIONS
-    --------------------------------------------------------- */
+    /*****************************************************
+     * 6. FIRESTORE OPERATIONS
+     *****************************************************/
     async function loadCatches() {
       if (!currentUser) return;
 
@@ -196,18 +195,13 @@
         collection(db, "catches"),
         where("userId", "==", currentUser.uid)
       );
-
       const snap = await getDocs(q);
       catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
       renderCatches();
     }
 
     async function saveCatch(c) {
-      await addDoc(collection(db, "catches"), {
-        ...c,
-        userId: currentUser.uid
-      });
+      await addDoc(collection(db, "catches"), { ...c, userId: currentUser.uid });
       await loadCatches();
     }
 
@@ -216,17 +210,16 @@
       await loadCatches();
     }
 
-
-    /* -------------------------------------------------------
-       ADD CATCH BUTTON
-    --------------------------------------------------------- */
+    /*****************************************************
+     * 7. ADD CATCH BUTTON
+     *****************************************************/
     document.getElementById("addCatchBtn").onclick = async () => {
       if (!currentUser) return alert("Please log in");
 
-      const species = document.getElementById("species").value;
+      const species = document.getElementById("species").value.trim();
       const weight  = parseFloat(document.getElementById("weight").value);
-      const spot    = document.getElementById("spot").value;
-      const notes   = document.getElementById("notes").value;
+      const spot    = document.getElementById("spot").value.trim();
+      const notes   = document.getElementById("notes").value.trim();
       const file    = document.getElementById("photo").files[0];
 
       if (!species || isNaN(weight)) {
@@ -255,10 +248,9 @@
       }
     };
 
-
-    /* -------------------------------------------------------
-       RENDER CATCHES
-    --------------------------------------------------------- */
+    /*****************************************************
+     * 8. RENDER CATCHES
+     *****************************************************/
     function renderCatches() {
       const list = document.getElementById("catchList");
       list.innerHTML = "";
@@ -302,6 +294,5 @@
     }
 
   </script>
-
 </body>
 </html>
