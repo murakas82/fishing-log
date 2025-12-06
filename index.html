@@ -15,6 +15,14 @@
       <p>Track your catches anywhere – works on mobile too.</p>
     </header>
 
+    <!-- Stats Card -->
+    <div class="card">
+      <h2 class="section-title">Stats</h2>
+      <div id="stats" class="stats-container">
+        <p class="empty-state">No stats yet – add your first catch!</p>
+      </div>
+    </div>
+
     <!-- Add Catch Form -->
     <div class="card">
       <h2 class="section-title">Add a catch</h2>
@@ -77,7 +85,72 @@
       renderCatches();
     }
 
-    // --- Rendering ---
+    // --- Stats rendering ---
+
+    function renderStats() {
+      const statsEl = document.getElementById("stats");
+      if (!statsEl) return;
+
+      statsEl.innerHTML = "";
+
+      if (catches.length === 0) {
+        const p = document.createElement("p");
+        p.className = "empty-state";
+        p.textContent = "No stats yet – add your first catch!";
+        statsEl.appendChild(p);
+        return;
+      }
+
+      const total = catches.length;
+      let biggest = catches[0];
+      let totalWeight = 0;
+      const speciesCounts = {};
+
+      catches.forEach(c => {
+        const w = typeof c.weightKg === "number" ? c.weightKg : 0;
+        totalWeight += w;
+        if (w > (biggest.weightKg || 0)) {
+          biggest = c;
+        }
+        if (c.species) {
+          speciesCounts[c.species] = (speciesCounts[c.species] || 0) + 1;
+        }
+      });
+
+      const avgWeight = totalWeight / total;
+      let topSpecies = null;
+      let topCount = 0;
+      for (const [species, count] of Object.entries(speciesCounts)) {
+        if (count > topCount) {
+          topCount = count;
+          topSpecies = species;
+        }
+      }
+
+      const list = document.createElement("div");
+      list.className = "stats";
+
+      function addStat(label, value) {
+        const item = document.createElement("div");
+        item.className = "stat-pill";
+        item.innerHTML = `
+          <span class="stat-label">${label}</span>
+          <span class="stat-value">${value}</span>
+        `;
+        list.appendChild(item);
+      }
+
+      addStat("Total", `${total} catch${total === 1 ? "" : "es"}`);
+      addStat("Biggest", `${biggest.weightKg.toFixed(2)} kg ${biggest.species}`);
+      addStat("Avg weight", `${avgWeight.toFixed(2)} kg`);
+      if (topSpecies) {
+        addStat("Most common", `${topSpecies} (${topCount})`);
+      }
+
+      statsEl.appendChild(list);
+    }
+
+    // --- Rendering catches ---
 
     function renderCatches() {
       const listEl = document.getElementById("catchList");
@@ -88,6 +161,8 @@
         p.className = "empty-state";
         p.textContent = "No catches yet. Add your first one!";
         listEl.appendChild(p);
+        // Also update stats
+        renderStats();
         return;
       }
 
@@ -117,7 +192,6 @@
           wrapper.appendChild(meta);
           if (c.notes) wrapper.appendChild(note);
 
-          // Photo if available
           if (c.photoDataUrl) {
             const img = document.createElement("img");
             img.className = "catch-photo";
@@ -126,7 +200,6 @@
             wrapper.appendChild(img);
           }
 
-          // Actions (delete button)
           const actions = document.createElement("div");
           actions.className = "catch-actions";
 
@@ -144,6 +217,9 @@
           listEl.appendChild(wrapper);
           listEl.appendChild(separator);
         });
+
+      // Update stats whenever the catch list changes
+      renderStats();
     }
 
     // --- Save Catch ---
