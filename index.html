@@ -5,124 +5,8 @@
   <title>My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <style>
-    /* Basic reset */
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    body {
-      background: #0b1724;
-      color: #f5f5f5;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-    }
-
-    .app {
-      width: 100%;
-      max-width: 480px; /* looks good on mobile and desktop */
-      padding: 16px;
-    }
-
-    header {
-      margin-bottom: 16px;
-    }
-
-    header h1 {
-      font-size: 1.6rem;
-      margin-bottom: 4px;
-    }
-
-    header p {
-      font-size: 0.9rem;
-      opacity: 0.8;
-    }
-
-    .card {
-      background: #111d2b;
-      border-radius: 12px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-    }
-
-    .card + .card {
-      margin-top: 8px;
-    }
-
-    label {
-      font-size: 0.9rem;
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    input, textarea, select {
-      width: 100%;
-      padding: 8px 10px;
-      margin-bottom: 10px;
-      border-radius: 8px;
-      border: 1px solid #2a3c52;
-      background: #081119;
-      color: #f5f5f5;
-      font-size: 0.95rem;
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 60px;
-    }
-
-    button {
-      width: 100%;
-      padding: 10px;
-      border-radius: 999px;
-      border: none;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      background: #1f8bfd;
-      color: white;
-      box-shadow: 0 4px 10px rgba(31,139,253,0.4);
-    }
-
-    button:active {
-      transform: translateY(1px);
-      box-shadow: 0 2px 6px rgba(31,139,253,0.4);
-    }
-
-    .catch-list {
-      margin-top: 16px;
-    }
-
-    .catch-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      font-size: 0.95rem;
-    }
-
-    .catch-top {
-      display: flex;
-      justify-content: space-between;
-      font-weight: 600;
-    }
-
-    .catch-meta {
-      font-size: 0.8rem;
-      opacity: 0.8;
-    }
-
-    .empty-state {
-      font-size: 0.9rem;
-      opacity: 0.8;
-      text-align: center;
-      padding: 16px 0;
-    }
-  </style>
+  <!-- Load external CSS -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
@@ -133,7 +17,7 @@
 
     <!-- Add Catch Form -->
     <div class="card">
-      <h2 style="font-size: 1.1rem; margin-bottom: 8px;">Add a catch</h2>
+      <h2 class="section-title">Add a catch</h2>
 
       <label for="species">Species</label>
       <input id="species" type="text" placeholder="Pike, Perch, Carp..." />
@@ -147,12 +31,15 @@
       <label for="notes">Notes (optional)</label>
       <textarea id="notes" placeholder="Weather, lure, depth, etc."></textarea>
 
+      <label for="photo">Photo (optional)</label>
+      <input id="photo" type="file" accept="image/*" />
+
       <button id="addCatchBtn">Save catch</button>
     </div>
 
     <!-- List of catches -->
     <div class="card">
-      <h2 style="font-size: 1.1rem; margin-bottom: 8px;">Your catches</h2>
+      <h2 class="section-title">Your catches</h2>
       <div id="catchList" class="catch-list">
         <p class="empty-state">No catches yet. Add your first one!</p>
       </div>
@@ -162,7 +49,6 @@
   <script>
     // --- Data handling ---
 
-    // Load from localStorage
     function loadCatches() {
       const json = localStorage.getItem("fishing_catches");
       if (!json) return [];
@@ -174,12 +60,22 @@
       }
     }
 
-    // Save to localStorage
     function saveCatches(catches) {
       localStorage.setItem("fishing_catches", JSON.stringify(catches));
     }
 
     let catches = loadCatches();
+
+    // --- Delete a catch ---
+
+    function deleteCatch(id) {
+      const confirmed = confirm("Delete this catch? This cannot be undone.");
+      if (!confirmed) return;
+
+      catches = catches.filter(c => c.id !== id);
+      saveCatches(catches);
+      renderCatches();
+    }
 
     // --- Rendering ---
 
@@ -221,50 +117,85 @@
           wrapper.appendChild(meta);
           if (c.notes) wrapper.appendChild(note);
 
+          // Photo if available
+          if (c.photoDataUrl) {
+            const img = document.createElement("img");
+            img.className = "catch-photo";
+            img.src = c.photoDataUrl;
+            img.alt = `${c.species} photo`;
+            wrapper.appendChild(img);
+          }
+
+          // Actions (delete button)
+          const actions = document.createElement("div");
+          actions.className = "catch-actions";
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "delete-btn";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", () => deleteCatch(c.id));
+
+          actions.appendChild(deleteBtn);
+          wrapper.appendChild(actions);
+
           const separator = document.createElement("div");
-          separator.style.height = "8px";
+          separator.style.height = "12px";
 
           listEl.appendChild(wrapper);
           listEl.appendChild(separator);
         });
     }
 
-    // --- Form logic ---
+    // --- Save Catch ---
 
     document.getElementById("addCatchBtn").addEventListener("click", () => {
       const speciesInput = document.getElementById("species");
       const weightInput = document.getElementById("weight");
       const spotInput = document.getElementById("spot");
       const notesInput = document.getElementById("notes");
+      const photoInput = document.getElementById("photo");
 
       const species = speciesInput.value.trim();
-      const weight = parseFloat(weightInput.value);
-      const spot = spotInput.value.trim();
-      const notes = notesInput.value.trim();
+      const weightValue = parseFloat(weightInput.value);
+      const spotValue = spotInput.value.trim();
+      const notesValue = notesInput.value.trim();
+      const file = photoInput.files[0];
 
-      if (!species || isNaN(weight)) {
+      if (!species || isNaN(weightValue)) {
         alert("Please enter at least species and weight.");
         return;
       }
 
-      const newCatch = {
-        id: Date.now(),
-        species,
-        weightKg: weight,
-        spotName: spot,
-        notes,
-        timestamp: Date.now()
+      const createCatch = (photoDataUrl) => {
+        const newCatch = {
+          id: Date.now(),
+          species,
+          weightKg: weightValue,
+          spotName: spotValue,
+          notes: notesValue,
+          timestamp: Date.now(),
+          photoDataUrl
+        };
+
+        catches.push(newCatch);
+        saveCatches(catches);
+        renderCatches();
+
+        // clear form
+        speciesInput.value = "";
+        weightInput.value = "";
+        spotInput.value = "";
+        notesInput.value = "";
+        photoInput.value = "";
       };
 
-      catches.push(newCatch);
-      saveCatches(catches);
-      renderCatches();
-
-      // Clear form
-      speciesInput.value = "";
-      weightInput.value = "";
-      spotInput.value = "";
-      notesInput.value = "";
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => createCatch(event.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        createCatch(null);
+      }
     });
 
     // Initial render
