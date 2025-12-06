@@ -87,19 +87,7 @@ button:active {
   box-shadow: 0 2px 6px rgba(31,139,253,0.4);
 }
 
-/* Main save button */
-#addCatchBtn {
-  width: 100%;
-}
-
-/* Auth UI */
-.auth-buttons {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-  margin-bottom: 4px;
-}
-
+/* Secondary / outline button */
 .secondary-btn {
   background: transparent;
   color: #1f8bfd;
@@ -108,7 +96,15 @@ button:active {
 }
 
 .secondary-btn:active {
-  box-shadow: 0 0 0 rgba(0,0,0,0);
+  box-shadow: none;
+}
+
+/* Auth UI */
+.auth-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
 
 .auth-message {
@@ -134,9 +130,14 @@ button:active {
   font-weight: 600;
 }
 
+/* Simple nav pills (Add catch / Your catches) */
+.nav-pill {
+  width: 100%;
+}
+
 /* Catch list */
 .catch-list {
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
 .catch-item {
@@ -157,11 +158,16 @@ button:active {
   opacity: 0.8;
 }
 
+.catch-notes {
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
 .empty-state {
   font-size: 0.9rem;
   opacity: 0.8;
-  text-align: center;
-  padding: 16px 0;
+  text-align: left;
+  padding: 8px 0;
 }
 
 .catch-photo {
@@ -171,19 +177,14 @@ button:active {
   display: block;
 }
 
-/* Actions row (for delete) */
-.catch-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-/* Smaller red delete button */
+/* Delete button */
 .delete-btn {
   background: #d9534f;
   box-shadow: 0 3px 8px rgba(217, 83, 79, 0.4);
   font-size: 0.85rem;
   padding: 6px 14px;
+  align-self: flex-end;
+  margin-top: 4px;
 }
 
 .delete-btn:active {
@@ -219,9 +220,3 @@ button:active {
 .stat-value {
   font-weight: 600;
 }
-
-.nav-pill {
-  width: 100%;
-  margin-top: 4px;
-}
-
