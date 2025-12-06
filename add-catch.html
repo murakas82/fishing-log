@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Add Catch – My Fishing Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app">
+    <header>
+      <h1>Add a Catch</h1>
+      <p>Fill in the details of your catch.</p>
+    </header>
+
+    <div class="card" id="protectedContent" style="display:none;">
+      <p style="font-size:0.9rem; margin-bottom:10px;">
+        Logged in as <span id="userEmail"></span>
+      </p>
+
+      <label>Species</label>
+      <input id="species" type="text" placeholder="Pike, Trout, Perch...">
+
+      <label>Weight (kg)</label>
+      <input id="weight" type="number" step="0.01" placeholder="2.4">
+
+      <label>Spot name</label>
+      <input id="spot" type="text" placeholder="Lake X…">
+
+      <label>Lure</label>
+      <input id="lure" type="text" placeholder="Spinner, Jig, Worm…">
+
+      <label>Water depth (m)</label>
+      <input id="depth" type="number" step="0.1" placeholder="3.5">
+
+      <label>Water temperature (°C)</label>
+      <input id="temp" type="number" step="0.1" placeholder="12.8">
+
+      <label>Notes</label>
+      <textarea id="notes" placeholder="Weather, behavior, etc."></textarea>
+
+      <button id="saveCatchBtn">Save catch</button>
+      <button id="backBtn" class="secondary-btn" style="margin-top:8px;">Back to main page</button>
+
+      <p id="formMessage" class="auth-message"></p>
+    </div>
+
+    <div class="card" id="needLogin" style="display:none;">
+      <p>You need to be logged in to add a catch.</p>
+      <button id="goLoginBtn">Go to main page</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+
+    import {
+      getAuth, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    import {
+      getFirestore, collection, addDoc
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    const protectedContent = document.getElementById("protectedContent");
+    const needLogin        = document.getElementById("needLogin");
+    const userEmailEl      = document.getElementById("userEmail");
+    const msgEl            = document.getElementById("formMessage");
+
+    // Back / go login buttons
+    document.getElementById("backBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+    document.getElementById("goLoginBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        protectedContent.style.display = "none";
+        needLogin.style.display = "block";
+        return;
+      }
+      needLogin.style.display = "none";
+      protectedContent.style.display = "block";
+      userEmailEl.textContent = user.email;
+
+      document.getElementById("saveCatchBtn").onclick = async () => {
+        msgEl.textContent = "";
+
+        const species = document.getElementById("species").value.trim();
+        const weight  = parseFloat(document.getElementById("weight").value);
+        const spot    = document.getElementById("spot").value.trim();
+        const lure    = document.getElementById("lure").value.trim();
+        const depth   = parseFloat(document.getElementById("depth").value);
+        const temp    = parseFloat(document.getElementById("temp").value);
+        const notes   = document.getElementById("notes").value.trim();
+
+        if (!species || isNaN(weight)) {
+          msgEl.textContent = "Species and weight are required.";
+          return;
+        }
+
+        try {
+          await addDoc(collection(db, "catches"), {
+            userId: user.uid,
+            species,
+            weightKg: weight,
+            spotName: spot,
+            lure,
+            depth,
+            temperature: temp,
+            notes,
+            timestamp: Date.now()
+          });
+
+          // After save, go back to main page
+          window.location.href = "index.html";
+        } catch (err) {
+          console.error(err);
+          msgEl.textContent = "Error saving catch.";
+        }
+      };
+    });
+  </script>
+</body>
+</html>
