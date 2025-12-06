@@ -17,7 +17,7 @@
 
     <!-- AUTH CARD -->
     <div class="card" id="authCard">
-      <h2>Log in or sign up</h2>
+      <h2 class="section-title">Log in or sign up</h2>
 
       <label>Email</label>
       <input id="authEmail" type="email" placeholder="you@example.com">
@@ -37,55 +37,36 @@
     <div class="card" id="userCard" style="display:none;">
       <div class="user-row">
         <div>
-          <div>Logged in as</div>
-          <div id="userEmail"></div>
+          <div class="user-label">Logged in as</div>
+          <div class="user-email" id="userEmail"></div>
         </div>
         <button id="logoutBtn" class="secondary-btn">Log out</button>
       </div>
     </div>
 
-    <!-- APP CONTENT -->
+    <!-- MAIN APP CONTENT: STATS + ADD CATCH + LIST -->
     <div id="appContent" style="display:none;">
 
       <!-- STATS -->
       <div class="card">
-        <h2>Stats</h2>
-        <div id="stats">
+        <h2 class="section-title">Stats</h2>
+        <div id="stats" class="stats-container">
           <p class="empty-state">No stats yet – add your first catch!</p>
         </div>
       </div>
 
-      <!-- ADD CATCH -->
+      <!-- ADD CATCH BUTTON -->
       <div class="card">
-        <h2>Add a catch</h2>
-
-        <label>Species</label>
-        <input id="species" type="text" placeholder="Pike, Trout, Perch...">
-
-        <label>Weight (kg)</label>
-        <input id="weight" type="number" step="0.01" placeholder="2.4">
-
-        <label>Spot name</label>
-        <input id="spot" type="text" placeholder="Lake X…">
-
-        <label>Lure</label>
-        <input id="lure" type="text" placeholder="Spinner, Jig, Worm…">
-
-        <label>Water depth (m)</label>
-        <input id="depth" type="number" step="0.1" placeholder="3.5">
-
-        <label>Water temperature (°C)</label>
-        <input id="temp" type="number" step="0.1" placeholder="12.8">
-
-        <label>Notes</label>
-        <textarea id="notes" placeholder="Weather, behavior, etc."></textarea>
-
-        <button id="addCatchBtn">Save catch</button>
+        <h2 class="section-title">Add a catch</h2>
+        <p style="margin-bottom: 8px; font-size: 0.9rem;">
+          Go to the catch form page to enter a new catch.
+        </p>
+        <button id="goAddCatchBtn">Go to Add Catch page</button>
       </div>
 
       <!-- CATCH LIST -->
       <div class="card">
-        <h2>Your catches</h2>
+        <h2 class="section-title">Your catches</h2>
         <div id="catchList" class="catch-list">
           <p class="empty-state">No catches yet.</p>
         </div>
@@ -93,7 +74,7 @@
     </div>
   </div>
 
-  <!-- FIREBASE LOGIC -->
+  <!-- FIREBASE + APP LOGIC -->
   <script type="module">
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -106,28 +87,28 @@
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     import {
-      getFirestore, collection, addDoc,
-      getDocs, query, where, deleteDoc, doc
+      getFirestore, collection, getDocs,
+      query, where, deleteDoc, doc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /* YOUR FIREBASE CONFIG */
+    // --- YOUR FIREBASE CONFIG (from your project) ---
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
       projectId: "fishing-log-app-murx",
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1656807867882",
-      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    const db   = getFirestore(app);
 
     let currentUser = null;
     let catches = [];
 
-    /* AUTH */
+    // --- AUTH UI ELEMENTS ---
     const emailEl = document.getElementById("authEmail");
     const passEl  = document.getElementById("authPassword");
     const msgEl   = document.getElementById("authMessage");
@@ -135,38 +116,51 @@
     document.getElementById("loginBtn").onclick = async () => {
       try {
         await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) { msgEl.textContent = err.message; }
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = err.message;
+      }
     };
 
     document.getElementById("signupBtn").onclick = async () => {
       try {
         await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) { msgEl.textContent = err.message; }
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = err.message;
+      }
     };
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-    /* AUTH STATE HANDLER */
+    // Go to Add Catch page
+    document.getElementById("goAddCatchBtn").onclick = () => {
+      window.location.href = "add-catch.html";
+    };
+
+    // --- AUTH STATE HANDLER ---
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
 
       if (user) {
-        document.getElementById("authCard").style.display = "none";
-        document.getElementById("userCard").style.display = "block";
+        document.getElementById("authCard").style.display   = "none";
+        document.getElementById("userCard").style.display   = "block";
         document.getElementById("appContent").style.display = "block";
-        document.getElementById("userEmail").textContent = user.email;
+        document.getElementById("userEmail").textContent    = user.email;
         await loadCatches();
       } else {
-        document.getElementById("authCard").style.display = "block";
-        document.getElementById("userCard").style.display = "none";
+        document.getElementById("authCard").style.display   = "block";
+        document.getElementById("userCard").style.display   = "none";
         document.getElementById("appContent").style.display = "none";
         catches = [];
         renderCatches();
       }
     });
 
-    /* LOAD CATCHES */
+    // --- LOAD CATCHES FROM FIRESTORE ---
     async function loadCatches() {
+      if (!currentUser) return;
+
       const q = query(
         collection(db, "catches"),
         where("userId", "==", currentUser.uid)
@@ -174,40 +168,16 @@
       const snap = await getDocs(q);
       catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderCatches();
+      renderStats();
     }
 
-    /* SAVE CATCH */
-    document.getElementById("addCatchBtn").onclick = async () => {
-      if (!currentUser) return;
-
-      const data = {
-        species: document.getElementById("species").value.trim(),
-        weightKg: parseFloat(document.getElementById("weight").value),
-        spotName: document.getElementById("spot").value.trim(),
-        lure: document.getElementById("lure").value.trim(),
-        depth: parseFloat(document.getElementById("depth").value),
-        temperature: parseFloat(document.getElementById("temp").value),
-        notes: document.getElementById("notes").value.trim(),
-        timestamp: Date.now(),
-        userId: currentUser.uid
-      };
-
-      if (!data.species || isNaN(data.weightKg)) {
-        alert("Species and weight required!");
-        return;
-      }
-
-      await addDoc(collection(db, "catches"), data);
-      await loadCatches();
-    };
-
-    /* DELETE CATCH */
+    // --- DELETE CATCH ---
     async function deleteCatch(id) {
       await deleteDoc(doc(db, "catches", id));
       await loadCatches();
     }
 
-    /* RENDER CATCHES */
+    // --- RENDER CATCH LIST ---
     function renderCatches() {
       const list = document.getElementById("catchList");
       list.innerHTML = "";
@@ -233,14 +203,54 @@
           <div class="catch-notes">${c.notes || ""}</div>
         `;
 
-        const del = document.createElement("button");
-        del.className = "delete-btn";
-        del.textContent = "Delete";
-        del.onclick = () => deleteCatch(c.id);
+        const delBtn = document.createElement("button");
+        delBtn.className = "delete-btn";
+        delBtn.textContent = "Delete";
+        delBtn.onclick = () => deleteCatch(c.id);
 
-        div.appendChild(del);
+        div.appendChild(delBtn);
         list.appendChild(div);
       });
+    }
+
+    // --- RENDER STATS ---
+    function renderStats() {
+      const statsEl = document.getElementById("stats");
+      statsEl.innerHTML = "";
+
+      if (!catches.length) {
+        statsEl.innerHTML = `<p class="empty-state">No stats yet – add your first catch!</p>`;
+        return;
+      }
+
+      const total = catches.length;
+      let biggest = catches[0];
+      let totalWeight = 0;
+
+      catches.forEach(c => {
+        const w = Number(c.weightKg) || 0;
+        totalWeight += w;
+        if (w > (Number(biggest.weightKg) || 0)) biggest = c;
+      });
+
+      const avgWeight = totalWeight / total;
+
+      const container = document.createElement("div");
+      container.className = "stats";
+
+      function add(label, value) {
+        const pill = document.createElement("div");
+        pill.className = "stat-pill";
+        pill.innerHTML = `<span class="stat-label">${label}</span>
+                          <span class="stat-value">${value}</span>`;
+        container.appendChild(pill);
+      }
+
+      add("Total catches", total);
+      add("Biggest fish", `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`);
+      add("Average weight", `${avgWeight.toFixed(2)} kg`);
+
+      statsEl.appendChild(container);
     }
 
   </script>
