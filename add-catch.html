@@ -5,23 +5,23 @@
   <title>Add Catch – My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <link rel="stylesheet" href="style.css">
-
+  <!-- Faster Firebase -->
   <link rel="preconnect" href="https://www.gstatic.com">
-<link rel="preconnect" href="https://www.googleapis.com">
+  <link rel="preconnect" href="https://www.googleapis.com">
 
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-  <div class="app">
+  <div class="app fade-in">
     <header>
       <h1>Add a Catch</h1>
       <p>Fill in the details of your catch.</p>
     </header>
 
     <!-- LOADING -->
-    <div class="card" id="loadingCard">
-      <p>Loading...</p>
+    <div id="loadingCard" class="loading-spinner-wrapper">
+      <div class="loading-spinner"></div>
     </div>
 
     <!-- FORM (only if logged in) -->
