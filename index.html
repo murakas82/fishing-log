@@ -5,10 +5,8 @@
   <title>My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Speed up Firebase loading -->
   <link rel="preconnect" href="https://www.gstatic.com">
   <link rel="preconnect" href="https://www.googleapis.com">
-
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -19,7 +17,7 @@
       <p>Track your catches anywhere – with login & cloud sync.</p>
     </header>
 
-    <!-- LOADING SPINNER -->
+    <!-- LOADING -->
     <div id="loadingCard" class="loading-spinner-wrapper">
       <div class="loading-spinner"></div>
     </div>
@@ -29,10 +27,10 @@
       <h2 class="section-title">Log in or sign up</h2>
 
       <label>Email</label>
-      <input id="authEmail" type="email" placeholder="you@example.com">
+      <input id="authEmail" type="email">
 
       <label>Password</label>
-      <input id="authPassword" type="password" placeholder="Password">
+      <input id="authPassword" type="password">
 
       <div class="auth-buttons">
         <button id="loginBtn">Log in</button>
@@ -42,7 +40,7 @@
       <p id="authMessage" class="auth-message"></p>
     </div>
 
-    <!-- USER CARD -->
+    <!-- LOGGED IN USER -->
     <div class="card" id="userCard" style="display:none;">
       <div class="user-row">
         <div>
@@ -56,7 +54,7 @@
     <!-- MAIN CONTENT -->
     <div id="appContent" style="display:none;">
 
-      <!-- STATS -->
+      <!------------ GLOBAL STATS ------------>
       <div class="card">
         <h2 class="section-title">Stats</h2>
         <div id="stats" class="stats-container">
@@ -64,20 +62,21 @@
         </div>
       </div>
 
-      <!-- MY FISHING SPOTS -->
-      <div class="card" id="spotsCard">
+      <!------------ MY FISHING SPOTS ------------>
+      <div class="card">
         <div class="spots-header-row">
           <h2 class="section-title">My fishing spots</h2>
           <button id="goAddSpotBtn" class="tiny-secondary-btn">Add new spot</button>
         </div>
+
         <div id="spotsContainer" class="spots-container">
-          <p class="empty-state">No spots yet – create one or add a catch with a spot name.</p>
+          <p class="empty-state">No fishing spots yet – add one!</p>
         </div>
       </div>
 
-      <!-- ADD CATCH -->
+      <!------------ ADD CATCH BUTTON ------------>
       <div class="card">
-        <button id="goAddCatchBtn" class="nav-pill">Add catch</button>
+        <button id="goAddCatchBtn" class="tiny-secondary-btn">Add catch</button>
       </div>
     </div>
   </div>
@@ -89,8 +88,8 @@
 
     import {
       getAuth, onAuthStateChanged,
-      createUserWithEmailAndPassword,
       signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
       signOut
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
@@ -99,6 +98,7 @@
       query, where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
+    /* FIREBASE CONFIG */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -112,10 +112,7 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    let currentUser = null;
-    let catches = [];
-    let spots   = [];
-
+    /* UI ELEMENTS */
     const loadingCard = document.getElementById("loadingCard");
     const authCard    = document.getElementById("authCard");
     const userCard    = document.getElementById("userCard");
@@ -126,78 +123,63 @@
     const passEl  = document.getElementById("authPassword");
     const msgEl   = document.getElementById("authMessage");
 
-    // AUTH BUTTONS
+    let currentUser = null;
+    let catches = [];
+    let spots = [];
+
+    /* AUTH BUTTONS */
     document.getElementById("loginBtn").onclick = async () => {
-      try {
-        await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) {
-        console.error(err);
-        msgEl.textContent = err.message;
-      }
+      try { await signInWithEmailAndPassword(auth, emailEl.value, passEl.value); }
+      catch (err) { msgEl.textContent = err.message; }
     };
 
     document.getElementById("signupBtn").onclick = async () => {
-      try {
-        await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) {
-        console.error(err);
-        msgEl.textContent = err.message;
-      }
+      try { await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value); }
+      catch (err) { msgEl.textContent = err.message; }
     };
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-    document.getElementById("goAddCatchBtn").onclick = () => {
-      window.location.href = "add-catch.html";
-    };
-    document.getElementById("goAddSpotBtn").onclick = () => {
+    document.getElementById("goAddSpotBtn").onclick = () =>
       window.location.href = "add-spot.html";
-    };
 
-    // AUTH STATE
+    document.getElementById("goAddCatchBtn").onclick = () =>
+      window.location.href = "add-catch.html";
+
+    /* AUTH STATE HANDLING */
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
-      if (loadingCard) loadingCard.style.display = "none";
+      loadingCard.style.display = "none";
 
       if (user) {
-        authCard.style.display   = "none";
-        userCard.style.display   = "block";
+        authCard.style.display = "none";
+        userCard.style.display = "block";
         appContent.style.display = "block";
-        userEmailEl.textContent  = user.email;
+        userEmailEl.textContent = user.email;
 
         await Promise.all([loadCatches(), loadSpots()]);
         renderStats();
         renderSpots();
       } else {
-        authCard.style.display   = "block";
-        userCard.style.display   = "none";
+        authCard.style.display = "block";
+        userCard.style.display = "none";
         appContent.style.display = "none";
-        catches = [];
-        spots   = [];
       }
     });
 
     async function loadCatches() {
-      if (!currentUser) return;
-      const q = query(
-        collection(db, "catches"),
-        where("userId", "==", currentUser.uid)
-      );
+      const q = query(collection(db, "catches"), where("userId", "==", currentUser.uid));
       const snap = await getDocs(q);
       catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 
     async function loadSpots() {
-      if (!currentUser) return;
-      const q = query(
-        collection(db, "spots"),
-        where("userId", "==", currentUser.uid)
-      );
+      const q = query(collection(db, "spots"), where("userId", "==", currentUser.uid));
       const snap = await getDocs(q);
       spots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 
-    // GLOBAL STATS
+    /* GLOBAL STATS */
     function renderStats() {
       const statsEl = document.getElementById("stats");
       statsEl.innerHTML = "";
@@ -214,10 +196,10 @@
       catches.forEach(c => {
         const w = Number(c.weightKg) || 0;
         totalWeight += w;
-        if (w > (Number(biggest.weightKg) || 0)) biggest = c;
+        if (w > Number(biggest.weightKg || 0)) biggest = c;
       });
 
-      const avgWeight = totalWeight / total;
+      const avg = totalWeight / total;
 
       const container = document.createElement("div");
       container.className = "stats";
@@ -232,143 +214,68 @@
 
       add("Total catches", total);
       add("Biggest fish", `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`);
-      add("Average weight", `${avgWeight.toFixed(2)} kg`);
+      add("Average weight", `${avg.toFixed(2)} kg`);
 
       statsEl.appendChild(container);
     }
 
-    // SPOTS LIST WITH STATS + GOOGLE MAPS + LINK TO spot.html
+    /* SPOTS DISPLAY */
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
       spotsEl.innerHTML = "";
 
-      if (!spots.length && !catches.length) {
-        spotsEl.innerHTML =
-          `<p class="empty-state">No spots yet – use “Add new spot” to create one.</p>`;
+      if (!spots.length) {
+        spotsEl.innerHTML = `<p class="empty-state">No fishing spots yet.</p>`;
         return;
       }
 
-      if (spots.length) {
-        const sortedSpots = spots.slice().sort((a, b) =>
-          (a.name || "").localeCompare(b.name || "")
-        );
+      spots
+        .slice()
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+        .forEach(spot => {
 
-        sortedSpots.forEach(spot => {
-          const list = catches.filter(c => {
-            if (c.spotId === spot.id) return true;
-            // fallback: match by name if old catches don’t have spotId
-            const sName = (spot.name || "").trim().toLowerCase();
-            const cName = (c.spotName || "").trim().toLowerCase();
-            return sName && sName === cName;
+          const spotCatches = catches.filter(c => c.spotId === spot.id);
+          const total = spotCatches.length;
+
+          let biggest = null;
+          spotCatches.forEach(c => {
+            const w = Number(c.weightKg) || 0;
+            if (!biggest || w > Number(biggest.weightKg || 0)) biggest = c;
           });
+
+          const statsLine = total
+            ? `Total catches: ${total} • Biggest: ${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`
+            : `No catches yet at this spot`;
+
+          const hasCoords = typeof spot.latitude === "number" && typeof spot.longitude === "number";
+          const mapsLink = hasCoords
+            ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
+            : "";
 
           const block = document.createElement("div");
           block.className = "spot-block";
 
-          // per-spot stats
-          const total = list.length;
-          let biggest = null;
-          list.forEach(c => {
-            const w = Number(c.weightKg) || 0;
-            if (!biggest || w > (Number(biggest.weightKg) || 0)) {
-              biggest = c;
-            }
-          });
-
-          let statsLine = "";
-          if (!total) {
-            statsLine = "No catches yet at this spot.";
-          } else {
-            const biggestText = biggest
-              ? `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species || ""}`
-              : "-";
-            statsLine = `Total catches: ${total} • Biggest: ${biggestText}`;
-          }
-
-         const hasCoords =
-  typeof spot.latitude === "number" && typeof spot.longitude === "number";
-
-const mapsLink = hasCoords
-  ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
-  : "";
-
-const header = document.createElement("div");
-header.className = "spot-header";
-
-header.innerHTML = `
-  <div class="spot-name-buttons">
-    <a
-      class="tiny-secondary-btn spot-link-btn"
-      href="spot.html?id=${encodeURIComponent(spot.id)}"
-    >
-      ${spot.name || "Unnamed spot"}
-    </a>
-    ${
-      hasCoords
-        ? `<a class="tiny-secondary-btn spot-link-btn" href="${mapsLink}" target="_blank">
-             Google Maps
-           </a>`
-        : ""
-    }
-  </div>
-  <div class="spot-count">${total} catch${total === 1 ? "" : "es"}</div>
-`;
-
-
-          block.appendChild(header);
-
-          const statsDiv = document.createElement("div");
-          statsDiv.className = "spot-stats";
-          statsDiv.textContent = statsLine;
-          block.appendChild(statsDiv);
-
-          spotsEl.appendChild(block);
-        });
-      } else {
-        // fallback: no saved spots, but there are catches – group by spotName
-        const groups = new Map();
-        catches.forEach(c => {
-          const key = (c.spotName || "Unnamed spot").trim() || "Unnamed spot";
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key).push(c);
-        });
-
-        groups.forEach((list, key) => {
-          const block = document.createElement("div");
-          block.className = "spot-block";
-
-          const total = list.length;
-          let biggest = null;
-          list.forEach(c => {
-            const w = Number(c.weightKg) || 0;
-            if (!biggest || w > (Number(biggest.weightKg) || 0)) {
-              biggest = c;
-            }
-          });
-
-          const biggestText = biggest
-            ? `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species || ""}`
-            : "-";
-
-          const header = document.createElement("div");
-          header.className = "spot-header";
-          header.innerHTML = `
-            <div class="spot-name">${key}</div>
-            <div class="spot-count">${total} catch${total === 1 ? "" : "es"}</div>
+          block.innerHTML = `
+            <div class="spot-header">
+              <div class="spot-name-buttons">
+                <a class="tiny-secondary-btn"
+                   href="spot.html?id=${encodeURIComponent(spot.id)}">
+                   ${spot.name}
+                </a>
+                ${
+                  hasCoords
+                    ? `<a class="tiny-secondary-btn" href="${mapsLink}" target="_blank">Google Maps</a>`
+                    : ""
+                }
+              </div>
+              <div class="spot-count">${total} catches</div>
+            </div>
+            <div class="spot-stats">${statsLine}</div>
           `;
-          block.appendChild(header);
-
-          const statsDiv = document.createElement("div");
-          statsDiv.className = "spot-stats";
-          statsDiv.textContent =
-            `Total catches: ${total} • Biggest: ${biggestText}`;
-          block.appendChild(statsDiv);
 
           spotsEl.appendChild(block);
         });
-      }
     }
   </script>
 </body>
 </html>
-
