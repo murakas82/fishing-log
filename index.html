@@ -62,6 +62,17 @@
         </div>
       </div>
 
+      <!-- PREDICTIONS -->
+      <div class="card">
+        <h2>Predictions</h2>
+        <p style="font-size:0.8rem; opacity:0.7; margin-top:0;">
+          Based on your past catches with similar weather in the next 7 days.
+        </p>
+        <div id="predictionsContainer" class="predictions-container">
+          <p class="empty-state">Not enough data yet – add more catches with weather.</p>
+        </div>
+      </div>
+
       <!-- FISHING SPOTS -->
       <div class="card">
         <div class="spots-header-row">
@@ -143,17 +154,18 @@
       loadingCard.style.display = "none";
 
       if (user) {
-        authCard.style.display = "none";
-        userCard.style.display = "block";
+        authCard.style.display   = "none";
+        userCard.style.display   = "block";
         appContent.style.display = "block";
-        userEmailEl.textContent = user.email;
+        userEmailEl.textContent  = user.email;
 
         await Promise.all([loadCatches(), loadSpots()]);
         renderStats();
+        await renderPredictions();
         renderSpots();
       } else {
-        authCard.style.display = "block";
-        userCard.style.display = "none";
+        authCard.style.display   = "block";
+        userCard.style.display   = "none";
         appContent.style.display = "none";
       }
     });
@@ -227,7 +239,7 @@
       return { icon: "❓", label: "Unknown weather" };
     }
 
-    /* WEATHER HELPER: Open-Meteo (km/h → m/s, icons + text) */
+    /* WEATHER HELPER FOR SPOTS: current weather (Open-Meteo, km/h → m/s) */
     async function fetchWeatherForSpot(lat, lng, el) {
       try {
         el.textContent = "Weather: loading…";
@@ -251,8 +263,8 @@
         const { icon, label } = getWeatherIconAndLabel(code);
 
         const parts = [];
-        if (label)         parts.push(label);
-        if (temp != null)  parts.push(`${temp.toFixed(1)} °C`);
+        if (label)          parts.push(label);
+        if (temp != null)   parts.push(`${temp.toFixed(1)} °C`);
         if (windMs != null) parts.push(`wind ${windMs.toFixed(1)} m/s`);
 
         const text = parts.join(", ");
@@ -264,6 +276,184 @@
         console.error(err);
         el.textContent = "Weather: failed to load";
       }
+    }
+
+    /* FORECAST CACHE FOR PREDICTIONS */
+    const forecastCache = {};
+
+    async function getForecastForSpot(spot) {
+      if (!spot || typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
+        return null;
+      }
+      if (forecastCache[spot.id]) {
+        return forecastCache[spot.id];
+      }
+
+      const url =
+        `https://api.open-meteo.com/v1/forecast` +
+        `?latitude=${spot.latitude}&longitude=${spot.longitude}` +
+        `&daily=temperature_2m_max,windspeed_10m_max,weathercode` +
+        `&forecast_days=7&timezone=auto`;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error("Forecast error");
+      }
+
+      const data = await res.json();
+      const daily = data.daily || {};
+      const times  = daily.time || [];
+      const temps  = daily.temperature_2m_max || [];
+      const winds  = daily.windspeed_10m_max || [];
+      const codes  = daily.weathercode || [];
+
+      const days = [];
+      for (let i = 0; i < times.length; i++) {
+        const t = temps[i];
+        const w = winds[i];
+        const c = codes[i];
+        if (typeof t !== "number" || typeof w !== "number") continue;
+        days.push({
+          date: times[i],              // "YYYY-MM-DD"
+          temp: t,
+          windMs: w / 3.6,            // km/h → m/s
+          code: c
+        });
+      }
+
+      const result = { days };
+      forecastCache[spot.id] = result;
+      return result;
+    }
+
+    /* PREDICTIONS: suggest best spots/days based on similar past weather */
+    async function renderPredictions() {
+      const container = document.getElementById("predictionsContainer");
+      container.innerHTML = "";
+
+      // We only use catches that have weatherTemp + weatherWindMs and a spotId
+      const catchesWithWeather = catches.filter(c =>
+        c.spotId &&
+        typeof c.weatherTemp === "number" &&
+        typeof c.weatherWindMs === "number"
+      );
+
+      if (catchesWithWeather.length < 5) {
+        container.innerHTML =
+          `<p class="empty-state">Not enough data yet – you need at least 5 catches with weather.</p>`;
+        return;
+      }
+
+      // Map spots by id for quick lookup
+      const spotMap = new Map(spots.map(s => [s.id, s]));
+
+      // Group catches by spotId
+      const catchesBySpot = {};
+      for (const c of catchesWithWeather) {
+        if (!catchesBySpot[c.spotId]) catchesBySpot[c.spotId] = [];
+        catchesBySpot[c.spotId].push(c);
+      }
+
+      const predictions = [];
+
+      // For each spot with catches & coordinates, fetch forecast and score days
+      for (const [spotId, spotCatches] of Object.entries(catchesBySpot)) {
+        const spot = spotMap.get(spotId);
+        if (!spot || typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
+          continue;
+        }
+
+        let forecast;
+        try {
+          forecast = await getForecastForSpot(spot);
+        } catch (err) {
+          console.error("Forecast error for spot", spotId, err);
+          continue;
+        }
+        if (!forecast || !forecast.days.length) continue;
+
+        let bestForSpot = null;
+
+        // For each forecast day, compute a "match score" with this spot's catches
+        for (const day of forecast.days) {
+          let score = 0;
+          let matches = 0;
+
+          for (const c of spotCatches) {
+            const tCatch = c.weatherTemp;
+            const wCatch = c.weatherWindMs;
+
+            const tDiff = Math.abs(day.temp - tCatch);
+            const wDiff = Math.abs(day.windMs - wCatch);
+
+            // Only count "similar" conditions
+            if (tDiff > 4 || wDiff > 3) continue;
+
+            matches++;
+
+            const base       = 1;
+            const weightBonus = Math.max(0, Number(c.weightKg) || 0);
+            const closeness   = Math.max(0, 1 - (tDiff / 4) - (wDiff / 3));
+
+            score += (base + weightBonus) * closeness;
+          }
+
+          if (matches === 0) continue;
+
+          if (!bestForSpot || score > bestForSpot.score) {
+            bestForSpot = {
+              spot,
+              date: day.date,
+              score,
+              matches,
+              temp: day.temp,
+              windMs: day.windMs,
+              code: day.code
+            };
+          }
+        }
+
+        if (bestForSpot) {
+          predictions.push(bestForSpot);
+        }
+      }
+
+      if (!predictions.length) {
+        container.innerHTML =
+          `<p class="empty-state">No useful predictions yet – add more catches with weather.</p>`;
+        return;
+      }
+
+      // Sort by score descending and take top 3
+      predictions.sort((a, b) => b.score - a.score);
+      const top = predictions.slice(0, 3);
+
+      top.forEach(p => {
+        const item = document.createElement("div");
+        item.className = "prediction-item";
+
+        const dateObj = new Date(p.date + "T12:00:00");
+        const dateStr = dateObj.toLocaleDateString();
+
+        const { icon, label } = getWeatherIconAndLabel(p.code);
+        const weatherText =
+          `${label}, ${p.temp.toFixed(1)} °C, wind ${p.windMs.toFixed(1)} m/s`;
+
+        item.innerHTML = `
+          <div class="prediction-top">
+            <div class="prediction-spot-name">${p.spot.name || "Unnamed spot"}</div>
+            <div class="prediction-date">${dateStr}</div>
+          </div>
+          <div class="prediction-weather">
+            Forecast: ${icon} ${weatherText}
+          </div>
+          <div class="prediction-score">
+            Based on ${p.matches} similar catch${p.matches === 1 ? "" : "es"} at this spot.
+          </div>
+        `;
+
+        container.appendChild(item);
+      });
     }
 
     /* RENDER SPOTS WITH CURRENT WEATHER */
