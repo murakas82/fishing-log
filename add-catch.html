@@ -40,9 +40,6 @@
       <select id="spotSelect">
         <option value="">Select a saved spot…</option>
       </select>
-      <div class="hint-text">
-        Manage spots from the main page using “Add a fishing spot”.
-      </div>
 
       <label>Lure</label>
       <input id="lure" type="text" placeholder="Spinner, Jig, Worm…">
@@ -63,7 +60,7 @@
         Use my location
       </button>
 
-      <div id="weatherInfo" class="catch-meta" style="margin-bottom:8px;"></div>
+      <div id="weatherInfo" style="font-size:0.85rem; opacity:0.8; margin-bottom:8px;"></div>
 
       <label>Notes</label>
       <textarea id="notes" placeholder="Weather, behavior, etc."></textarea>
@@ -98,7 +95,7 @@
       where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // 🔧 Your Firebase config (same as other pages)
+    // 🔧 Firebase config (same as other pages)
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -125,10 +122,8 @@
     const weatherInfoEl    = document.getElementById("weatherInfo");
     const saveCatchBtn     = document.getElementById("saveCatchBtn");
 
-    // store weather snapshot here before saving
-    let lastWeather = null;
-    // saved spots from Firestore
-    let savedSpots = [];
+    let lastWeather = null;   // { temp, windMs, description }
+    let savedSpots  = [];     // spots from Firestore
 
     document.getElementById("backBtn").onclick = () => {
       window.location.href = "index.html";
@@ -137,7 +132,7 @@
       window.location.href = "index.html";
     };
 
-    // 🔥 Open-Meteo weather fetch (no key, works on GitHub Pages)
+    // 🔥 Open-Meteo weather fetch (windspeed fixed to m/s)
     async function fetchWeather(lat, lng) {
       try {
         weatherInfoEl.textContent = "Getting weather for this spot...";
@@ -156,18 +151,23 @@
         const cw = data.current_weather || {};
 
         const temp = typeof cw.temperature === "number" ? cw.temperature : null;
-        const wind = typeof cw.windspeed === "number" ? cw.windspeed : null;
+
+        // Open-Meteo windspeed is in km/h → convert to m/s
+        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
+        const windMs  = windKmh != null ? windKmh / 3.6 : null;
+
         const code = cw.weathercode; // numeric weather code
 
         let descParts = [];
-        if (temp != null) descParts.push(`${temp.toFixed(1)} °C`);
-        if (wind != null) descParts.push(`wind ${wind.toFixed(1)} m/s`);
-        if (code != null) descParts.push(`code ${code}`);
+        if (temp != null)    descParts.push(`${temp.toFixed(1)} °C`);
+        if (windMs != null)  descParts.push(`wind ${windMs.toFixed(1)} m/s`);
+        if (code != null)    descParts.push(`code ${code}`);
 
         const description = descParts.join(", ");
 
         lastWeather = {
           temp: temp,
+          windMs: windMs,
           description: description || null
         };
 
@@ -201,20 +201,21 @@
             const name = (spot.name || "").trim();
             if (!name) return;
             const opt = document.createElement("option");
-            opt.value = spot.id;       // we store the document id
+            opt.value = spot.id;       // store document id
             opt.textContent = name;
             spotSelect.appendChild(opt);
           });
 
+        // If no spots exist, disable form
         if (!savedSpots.length) {
           msgEl.textContent =
             "You don't have any fishing spots yet. Go back to the main page and add one first.";
-          spotSelect.disabled    = true;
-          saveCatchBtn.disabled  = true;
+          spotSelect.disabled   = true;
+          saveCatchBtn.disabled = true;
         } else {
           msgEl.textContent = "";
-          spotSelect.disabled    = false;
-          saveCatchBtn.disabled  = false;
+          spotSelect.disabled   = false;
+          saveCatchBtn.disabled = false;
         }
       } catch (err) {
         console.error("Error loading spots", err);
@@ -222,7 +223,22 @@
       }
     }
 
-    // When user chooses a saved spot, auto-fill coordinates + weather
+    // If coming from "Add catch" button on a spot: preselect that spot
+    function preselectSpotFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const spotId = params.get("spotId");
+      if (!spotId) return;
+
+      // Wait a tick so that options exist
+      setTimeout(() => {
+        if ([...spotSelect.options].some(o => o.value === spotId)) {
+          spotSelect.value = spotId;
+          spotSelect.dispatchEvent(new Event("change"));
+        }
+      }, 200);
+    }
+
+    // When user chooses a spot, auto-fill coordinates + weather
     spotSelect.addEventListener("change", async () => {
       weatherInfoEl.textContent = "";
       lastWeather = null;
@@ -239,9 +255,13 @@
 
       if (typeof match.latitude === "number") {
         latInput.value = match.latitude.toFixed(6);
+      } else {
+        latInput.value = "";
       }
       if (typeof match.longitude === "number") {
         lngInput.value = match.longitude.toFixed(6);
+      } else {
+        lngInput.value = "";
       }
 
       if (
@@ -253,7 +273,6 @@
     });
 
     onAuthStateChanged(auth, async (user) => {
-      // hide loading once we know
       loadingCard.style.display = "none";
 
       if (!user) {
@@ -266,10 +285,10 @@
       protectedContent.style.display = "block";
       userEmailEl.textContent        = user.email;
 
-      // Load saved spots for dropdown
       await loadSpotsForUser(user);
+      preselectSpotFromUrl();
 
-      // "Use my location" button
+      // Use my location button
       useLocationBtn.onclick = () => {
         msgEl.textContent = "";
         weatherInfoEl.textContent = "";
@@ -288,7 +307,6 @@
             latInput.value = latitude.toFixed(6);
             lngInput.value = longitude.toFixed(6);
             msgEl.textContent = "Location set.";
-
             await fetchWeather(latitude, longitude);
           },
           (error) => {
@@ -341,7 +359,7 @@
             species,
             weightKg: weight,
             spotName,
-            spotId,  // link to spot document
+            spotId,
             lure,
             depth,
             temperature: temp,
@@ -349,6 +367,7 @@
             latitude: isNaN(lat) ? null : lat,
             longitude: isNaN(lng) ? null : lng,
             weatherTemp: lastWeather?.temp ?? null,
+            weatherWindMs: lastWeather?.windMs ?? null,
             weatherDescription: lastWeather?.description ?? null,
             timestamp: Date.now()
           });
