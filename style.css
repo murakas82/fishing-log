@@ -499,3 +499,17 @@ button:active {
   margin-bottom: 8px;
 }
 
+.spot-name-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Make tiny-secondary-btn also work nicely on <a> elements */
+.tiny-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none; /* remove underline on links */
+}
+
