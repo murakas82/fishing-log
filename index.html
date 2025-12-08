@@ -66,7 +66,8 @@
       <div class="card">
         <h2>Predictions</h2>
         <p style="font-size:0.8rem; opacity:0.7; margin-top:0;">
-          Based on your past catches with similar weather (temperature, wind and pressure) in the next 7 days.
+          Best spots for the next 3 days, based on your past catches with similar weather.
+          Score shows how strong the match is (0–100%).
         </p>
         <div id="predictionsContainer" class="predictions-container">
           <p class="empty-state">Not enough data yet – add more catches with weather.</p>
@@ -329,7 +330,7 @@
       return result;
     }
 
-    /* PREDICTIONS: suggest best spots/days based on similar past weather incl. pressure */
+    /* PREDICTIONS: next 3 days, score 0–100% */
     async function renderPredictions() {
       const container = document.getElementById("predictionsContainer");
       container.innerHTML = "";
@@ -357,7 +358,11 @@
         catchesBySpot[c.spotId].push(c);
       }
 
-      const predictions = [];
+      // We track the best spot per date (for the next 3 days)
+      const predictionsByDate = new Map();
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
       for (const [spotId, spotCatches] of Object.entries(catchesBySpot)) {
         const spot = spotMap.get(spotId);
@@ -374,9 +379,12 @@
         }
         if (!forecast || !forecast.days.length) continue;
 
-        let bestForSpot = null;
-
         for (const day of forecast.days) {
+          // Restrict to today + next 2 days (3 days total)
+          const dObj = new Date(day.date + "T00:00:00");
+          const diffDays = Math.round((dObj - today) / (1000 * 60 * 60 * 24));
+          if (diffDays < 0 || diffDays > 2) continue; // only next 3 days
+
           let score = 0;
           let matches = 0;
 
@@ -414,8 +422,9 @@
 
           if (matches === 0) continue;
 
-          if (!bestForSpot || score > bestForSpot.score) {
-            bestForSpot = {
+          const existing = predictionsByDate.get(day.date);
+          if (!existing || score > existing.score) {
+            predictionsByDate.set(day.date, {
               spot,
               date: day.date,
               score,
@@ -423,26 +432,34 @@
               temp: day.temp,
               windMs: day.windMs,
               code: day.code
-            };
+            });
           }
         }
-
-        if (bestForSpot) {
-          predictions.push(bestForSpot);
-        }
       }
+
+      const predictions = Array.from(predictionsByDate.values());
 
       if (!predictions.length) {
         container.innerHTML =
-          `<p class="empty-state">No useful predictions yet – add more catches with weather.</p>`;
+          `<p class="empty-state">No useful predictions yet for the next 3 days – add more catches with weather.</p>`;
         return;
       }
 
-      // Sort by score descending and take top 3
-      predictions.sort((a, b) => b.score - a.score);
-      const top = predictions.slice(0, 3);
+      // Sort by date ascending (next 3 days)
+      predictions.sort((a, b) => a.date.localeCompare(b.date));
 
-      top.forEach(p => {
+      // Convert scores to 0–100% (relative within these days)
+      const scores = predictions.map(p => p.score);
+      const maxScore = Math.max(...scores);
+      const minScore = Math.min(...scores);
+      const range = maxScore - minScore || 1;
+
+      predictions.forEach(p => {
+        const normalized = (p.score - minScore) / range; // 0..1
+        p.percent = Math.round(normalized * 100);
+      });
+
+      predictions.forEach(p => {
         const item = document.createElement("div");
         item.className = "prediction-item";
 
@@ -462,7 +479,7 @@
             Forecast: ${icon} ${weatherText}
           </div>
           <div class="prediction-score">
-            Based on ${p.matches} similar catch${p.matches === 1 ? "" : "es"} at this spot.
+            Score: ${p.percent}% (based on ${p.matches} similar catch${p.matches === 1 ? "" : "es"})
           </div>
         `;
 
