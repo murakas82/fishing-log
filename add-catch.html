@@ -36,10 +36,13 @@
       <label>Weight (kg)</label>
       <input id="weight" type="number" step="0.01" placeholder="2.4">
 
-      <label>Spot name</label>
-      <!-- Text input with dropdown suggestions from saved spots -->
-      <input id="spot" type="text" list="spotList" placeholder="Lake X…">
-      <datalist id="spotList"></datalist>
+      <label>Fishing spot <span style="opacity:0.7;font-size:0.8rem;">(required)</span></label>
+      <select id="spotSelect">
+        <option value="">Select a saved spot…</option>
+      </select>
+      <div class="hint-text">
+        Manage spots from the main page using “Add a fishing spot”.
+      </div>
 
       <label>Lure</label>
       <input id="lure" type="text" placeholder="Spinner, Jig, Worm…">
@@ -50,10 +53,10 @@
       <label>Water temperature (°C)</label>
       <input id="temp" type="number" step="0.1" placeholder="12.8">
 
-      <label>Latitude (auto from GPS or spot)</label>
+      <label>Latitude (auto from spot or GPS)</label>
       <input id="lat" type="text" placeholder="Not set">
 
-      <label>Longitude (auto from GPS or spot)</label>
+      <label>Longitude (auto from spot or GPS)</label>
       <input id="lng" type="text" placeholder="Not set">
 
       <button id="useLocationBtn" type="button" class="secondary-btn" style="margin-bottom:10px;">
@@ -114,13 +117,12 @@
     const userEmailEl      = document.getElementById("userEmail");
     const msgEl            = document.getElementById("formMessage");
 
-    const spotInput        = document.getElementById("spot");
-    const spotListEl       = document.getElementById("spotList");
-
+    const spotSelect       = document.getElementById("spotSelect");
     const latInput         = document.getElementById("lat");
     const lngInput         = document.getElementById("lng");
     const useLocationBtn   = document.getElementById("useLocationBtn");
     const weatherInfoEl    = document.getElementById("weatherInfo");
+    const saveCatchBtn     = document.getElementById("saveCatchBtn");
 
     // store MET weather snapshot here before saving
     let lastWeather = null;
@@ -185,31 +187,50 @@
         const snap = await getDocs(q);
         savedSpots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        const uniqueNames = new Set();
-        spotListEl.innerHTML = "";
+        spotSelect.innerHTML = `<option value="">Select a saved spot…</option>`;
 
-        savedSpots.forEach(spot => {
-          const name = (spot.name || "").trim();
-          if (!name || uniqueNames.has(name)) return;
-          uniqueNames.add(name);
+        savedSpots
+          .slice()
+          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+          .forEach(spot => {
+            const name = (spot.name || "").trim();
+            if (!name) return;
+            const opt = document.createElement("option");
+            opt.value = spot.id;       // use id as value
+            opt.textContent = name;
+            spotSelect.appendChild(opt);
+          });
 
-          const opt = document.createElement("option");
-          opt.value = name;
-          spotListEl.appendChild(opt);
-        });
+        // If there are no spots, disable saving and show message
+        if (!savedSpots.length) {
+          msgEl.textContent =
+            "You don't have any fishing spots yet. Go back to the main page and add one first.";
+          spotSelect.disabled    = true;
+          saveCatchBtn.disabled  = true;
+        } else {
+          msgEl.textContent = "";
+          spotSelect.disabled    = false;
+          saveCatchBtn.disabled  = false;
+        }
       } catch (err) {
         console.error("Error loading spots", err);
+        msgEl.textContent = "Could not load fishing spots.";
       }
     }
 
-    // When user chooses a spot name, auto-fill coordinates (and weather)
-    spotInput.addEventListener("change", async () => {
-      const name = spotInput.value.trim().toLowerCase();
-      if (!name) return;
+    // When user chooses a spot, auto-fill coordinates (and weather)
+    spotSelect.addEventListener("change", async () => {
+      weatherInfoEl.textContent = "";
+      lastWeather = null;
 
-      const match = savedSpots.find(
-        s => (s.name || "").trim().toLowerCase() === name
-      );
+      const spotId = spotSelect.value;
+      if (!spotId) {
+        latInput.value = "";
+        lngInput.value = "";
+        return;
+      }
+
+      const match = savedSpots.find(s => s.id === spotId);
       if (!match) return;
 
       if (typeof match.latitude === "number") {
@@ -264,7 +285,6 @@
             lngInput.value = longitude.toFixed(6);
             msgEl.textContent = "Location set.";
 
-            // Fetch current weather for this location via our Netlify proxy
             await fetchWeatherFromYr(latitude, longitude);
           },
           (error) => {
@@ -283,12 +303,12 @@
         );
       };
 
-      document.getElementById("saveCatchBtn").onclick = async () => {
+      saveCatchBtn.onclick = async () => {
         msgEl.textContent = "";
 
         const species = document.getElementById("species").value.trim();
         const weight  = parseFloat(document.getElementById("weight").value);
-        const spot    = spotInput.value.trim();
+        const spotId  = spotSelect.value;
         const lure    = document.getElementById("lure").value.trim();
         const depth   = parseFloat(document.getElementById("depth").value);
         const temp    = parseFloat(document.getElementById("temp").value);
@@ -302,12 +322,21 @@
           return;
         }
 
+        if (!spotId) {
+          msgEl.textContent = "Please choose a fishing spot. You can add spots on the main page.";
+          return;
+        }
+
+        const chosenSpot = savedSpots.find(s => s.id === spotId);
+        const spotName   = chosenSpot?.name || "";
+
         try {
           await addDoc(collection(db, "catches"), {
             userId: user.uid,
             species,
             weightKg: weight,
-            spotName: spot,
+            spotName,
+            spotId,  // keep link to spot document
             lure,
             depth,
             temperature: temp,
