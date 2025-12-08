@@ -279,8 +279,10 @@
       }
     }
 
-    /* FORECAST CACHE FOR PREDICTIONS */
+    /* FORECAST CACHE FOR PREDICTIONS + per-spot per-day percent store */
     const forecastCache = {};
+    // spotId -> { dateString -> percent }
+    const spotPredictionPerDay = {};
 
     async function getForecastForSpot(spot) {
       if (!spot || typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
@@ -330,10 +332,23 @@
       return result;
     }
 
-    /* PREDICTIONS: next 3 days, score 0–100% */
+    // Weekday short labels: Sun., Mon., Tues., Wed., Thurs., Fri., Sat.
+    function formatWeekdayShort(dateStr) {
+      const d = new Date(dateStr + "T12:00:00");
+      const idx = d.getDay();
+      const names = ["Sun.", "Mon.", "Tues.", "Wed.", "Thurs.", "Fri.", "Sat."];
+      return names[idx] ?? dateStr;
+    }
+
+    /* PREDICTIONS: next 3 days, score 0–100% + per-spot per-day scores */
     async function renderPredictions() {
       const container = document.getElementById("predictionsContainer");
       container.innerHTML = "";
+
+      // reset per-spot per-day scores
+      for (const key in spotPredictionPerDay) {
+        delete spotPredictionPerDay[key];
+      }
 
       // Only use catches that have temp + wind; pressure is optional
       const catchesWithWeather = catches.filter(c =>
@@ -457,8 +472,14 @@
       predictions.forEach(p => {
         const normalized = (p.score - minScore) / range; // 0..1
         p.percent = Math.round(normalized * 100);
+
+        // Save percent for this spot & this date (used in spots list)
+        const sid = p.spot.id;
+        if (!spotPredictionPerDay[sid]) spotPredictionPerDay[sid] = {};
+        spotPredictionPerDay[sid][p.date] = p.percent;
       });
 
+      // Build Predictions card UI
       predictions.forEach(p => {
         const item = document.createElement("div");
         item.className = "prediction-item";
@@ -487,7 +508,7 @@
       });
     }
 
-    /* RENDER SPOTS WITH CURRENT WEATHER */
+    /* RENDER SPOTS WITH CURRENT WEATHER + PER-DAY PREDICTION SCORE */
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
       spotsEl.innerHTML = "";
@@ -523,6 +544,22 @@
             ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
             : "";
 
+          // Build per-day prediction text for this spot, if any
+          let predictionLine = "";
+          const perDay = spotPredictionPerDay[spot.id];
+          if (perDay) {
+            const dates = Object.keys(perDay).sort();
+            const parts = dates.map(d => {
+              const label = formatWeekdayShort(d);
+              const pct = perDay[d];
+              return `${label} ${pct}%`;
+            });
+            if (parts.length) {
+              predictionLine =
+                `<div class="spot-prediction">Prediction score: ${parts.join(", ")}</div>`;
+            }
+          }
+
           const block = document.createElement("div");
           block.className = "spot-block";
 
@@ -556,6 +593,7 @@
 
             <div class="spot-stats">${statsLine}</div>
             <div class="spot-weather"></div>
+            ${predictionLine}
           `;
 
           const weatherEl = block.querySelector(".spot-weather");
