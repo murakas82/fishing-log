@@ -435,7 +435,9 @@
             score += (base + weightBonus) * closeness;
           }
 
-          if (matches === 0) continue;
+          // NOTE: we NO LONGER skip days with matches === 0
+          // If no historical matches, score stays 0 and matches = 0,
+          // but we still create a prediction entry for that date.
 
           const existing = predictionsByDate.get(day.date);
           if (!existing || score > existing.score) {
