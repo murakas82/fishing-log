@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Add Fishing Spot – My Fishing Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Faster Firebase -->
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://www.googleapis.com">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app fade-in">
+    <header>
+      <h1>Add a fishing spot</h1>
+      <p>Save a named spot with GPS coordinates.</p>
+    </header>
+
+    <!-- LOADING -->
+    <div id="loadingCard" class="loading-spinner-wrapper">
+      <div class="loading-spinner"></div>
+    </div>
+
+    <!-- FORM (only if logged in) -->
+    <div class="card" id="protectedContent" style="display:none;">
+      <p style="font-size:0.9rem; margin-bottom:10px;">
+        Logged in as <span id="userEmail"></span>
+      </p>
+
+      <label>Spot name</label>
+      <input id="spotName" type="text" placeholder="Lake X – North bank">
+
+      <label>Latitude</label>
+      <input id="lat" type="text" placeholder="Use my location or enter manually">
+
+      <label>Longitude</label>
+      <input id="lng" type="text" placeholder="Use my location or enter manually">
+
+      <button id="useLocationBtn" type="button" class="secondary-btn" style="margin-bottom:10px;">
+        Use my location
+      </button>
+
+      <button id="saveSpotBtn">Save fishing spot</button>
+      <button id="backBtn" class="secondary-btn" style="margin-top:8px;">Back to main page</button>
+
+      <p id="formMessage" class="auth-message"></p>
+    </div>
+
+    <!-- MESSAGE IF NOT LOGGED IN -->
+    <div class="card" id="needLogin" style="display:none;">
+      <p>You need to be logged in to add a fishing spot.</p>
+      <button id="goLoginBtn">Go to main page</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+
+    import {
+      getAuth, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    import {
+      getFirestore, collection, addDoc
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1656807867882",
+      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    const loadingCard      = document.getElementById("loadingCard");
+    const protectedContent = document.getElementById("protectedContent");
+    const needLogin        = document.getElementById("needLogin");
+    const userEmailEl      = document.getElementById("userEmail");
+    const msgEl            = document.getElementById("formMessage");
+
+    const spotNameInput    = document.getElementById("spotName");
+    const latInput         = document.getElementById("lat");
+    const lngInput         = document.getElementById("lng");
+    const useLocationBtn   = document.getElementById("useLocationBtn");
+
+    document.getElementById("backBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+    document.getElementById("goLoginBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+
+    onAuthStateChanged(auth, (user) => {
+      loadingCard.style.display = "none";
+
+      if (!user) {
+        protectedContent.style.display = "none";
+        needLogin.style.display        = "block";
+        return;
+      }
+
+      needLogin.style.display        = "none";
+      protectedContent.style.display = "block";
+      userEmailEl.textContent        = user.email;
+
+      useLocationBtn.onclick = () => {
+        msgEl.textContent = "";
+
+        if (!navigator.geolocation) {
+          msgEl.textContent = "Geolocation is not supported by this browser.";
+          return;
+        }
+
+        msgEl.textContent = "Getting your location...";
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            latInput.value = latitude.toFixed(6);
+            lngInput.value = longitude.toFixed(6);
+            msgEl.textContent = "Location set.";
+          },
+          (error) => {
+            console.error(error);
+            if (error.code === error.PERMISSION_DENIED) {
+              msgEl.textContent = "Permission denied. Please allow location access.";
+            } else {
+              msgEl.textContent = "Could not get location.";
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000
+          }
+        );
+      };
+
+      document.getElementById("saveSpotBtn").onclick = async () => {
+        msgEl.textContent = "";
+
+        const name = spotNameInput.value.trim();
+        const lat  = parseFloat(latInput.value);
+        const lng  = parseFloat(lngInput.value);
+
+        if (!name) {
+          msgEl.textContent = "Spot name is required.";
+          return;
+        }
+
+        try {
+          await addDoc(collection(db, "spots"), {
+            userId: user.uid,
+            name,
+            latitude: isNaN(lat) ? null : lat,
+            longitude: isNaN(lng) ? null : lng,
+            createdAt: Date.now()
+          });
+
+          window.location.href = "index.html";
+        } catch (err) {
+          console.error(err);
+          msgEl.textContent = "Error saving spot.";
+        }
+      };
+    });
+  </script>
+</body>
+</html>
