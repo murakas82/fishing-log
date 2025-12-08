@@ -66,7 +66,7 @@
       <div class="card">
         <h2>Predictions</h2>
         <p style="font-size:0.8rem; opacity:0.7; margin-top:0;">
-          Based on your past catches with similar weather in the next 7 days.
+          Based on your past catches with similar weather (temperature, wind and pressure) in the next 7 days.
         </p>
         <div id="predictionsContainer" class="predictions-container">
           <p class="empty-state">Not enough data yet – add more catches with weather.</p>
@@ -292,7 +292,7 @@
       const url =
         `https://api.open-meteo.com/v1/forecast` +
         `?latitude=${spot.latitude}&longitude=${spot.longitude}` +
-        `&daily=temperature_2m_max,windspeed_10m_max,weathercode` +
+        `&daily=temperature_2m_max,windspeed_10m_max,weathercode,surface_pressure_mean` +
         `&forecast_days=7&timezone=auto`;
 
       const res = await fetch(url);
@@ -306,18 +306,21 @@
       const temps  = daily.temperature_2m_max || [];
       const winds  = daily.windspeed_10m_max || [];
       const codes  = daily.weathercode || [];
+      const pressures = daily.surface_pressure_mean || daily.mean_surface_pressure || [];
 
       const days = [];
       for (let i = 0; i < times.length; i++) {
         const t = temps[i];
         const w = winds[i];
         const c = codes[i];
+        const p = Array.isArray(pressures) ? pressures[i] : undefined;
         if (typeof t !== "number" || typeof w !== "number") continue;
         days.push({
           date: times[i],              // "YYYY-MM-DD"
           temp: t,
           windMs: w / 3.6,            // km/h → m/s
-          code: c
+          code: c,
+          pressure: typeof p === "number" ? p : null   // hPa
         });
       }
 
@@ -326,12 +329,12 @@
       return result;
     }
 
-    /* PREDICTIONS: suggest best spots/days based on similar past weather */
+    /* PREDICTIONS: suggest best spots/days based on similar past weather incl. pressure */
     async function renderPredictions() {
       const container = document.getElementById("predictionsContainer");
       container.innerHTML = "";
 
-      // We only use catches that have weatherTemp + weatherWindMs and a spotId
+      // Only use catches that have temp + wind; pressure is optional
       const catchesWithWeather = catches.filter(c =>
         c.spotId &&
         typeof c.weatherTemp === "number" &&
@@ -344,7 +347,7 @@
         return;
       }
 
-      // Map spots by id for quick lookup
+      // Map spots by id
       const spotMap = new Map(spots.map(s => [s.id, s]));
 
       // Group catches by spotId
@@ -356,7 +359,6 @@
 
       const predictions = [];
 
-      // For each spot with catches & coordinates, fetch forecast and score days
       for (const [spotId, spotCatches] of Object.entries(catchesBySpot)) {
         const spot = spotMap.get(spotId);
         if (!spot || typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
@@ -374,7 +376,6 @@
 
         let bestForSpot = null;
 
-        // For each forecast day, compute a "match score" with this spot's catches
         for (const day of forecast.days) {
           let score = 0;
           let matches = 0;
@@ -382,18 +383,31 @@
           for (const c of spotCatches) {
             const tCatch = c.weatherTemp;
             const wCatch = c.weatherWindMs;
+            const pCatch = typeof c.weatherPressure === "number" ? c.weatherPressure : null;
 
             const tDiff = Math.abs(day.temp - tCatch);
             const wDiff = Math.abs(day.windMs - wCatch);
 
-            // Only count "similar" conditions
+            // Pressure difference if both exist
+            let pDiff = null;
+            if (pCatch != null && day.pressure != null) {
+              pDiff = Math.abs(day.pressure - pCatch);
+            }
+
+            // basic similarity thresholds
             if (tDiff > 4 || wDiff > 3) continue;
+            if (pDiff != null && pDiff > 8) continue; // 8 hPa difference = too different
 
             matches++;
 
-            const base       = 1;
+            const base        = 1;
             const weightBonus = Math.max(0, Number(c.weightKg) || 0);
-            const closeness   = Math.max(0, 1 - (tDiff / 4) - (wDiff / 3));
+            const tempPenalty = tDiff / 4;    // up to 1
+            const windPenalty = wDiff / 3;    // up to 1
+            const pressPenalty = pDiff != null ? (pDiff / 20) : 0; // 20 hPa diff ~ 1
+
+            let closeness = 1 - tempPenalty - windPenalty - pressPenalty;
+            if (closeness < 0) closeness = 0;
 
             score += (base + weightBonus) * closeness;
           }
