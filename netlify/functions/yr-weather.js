@@ -22,7 +22,7 @@ export async function handler(event, context) {
   try {
     const res = await fetch(metUrl, {
       headers: {
-        "User-Agent": "fishing-log-app/1.0 (contact: YOUR_EMAIL_HERE)",
+        "User-Agent": "fishing-log-app/1.0 (contact: ilmar.murakas@gmail.com)",
         "Accept": "application/json"
       }
     });
