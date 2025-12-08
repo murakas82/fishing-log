@@ -58,6 +58,8 @@
         Use my location
       </button>
 
+      <div id="weatherInfo" class="catch-meta" style="margin-bottom:8px;"></div>
+
       <label>Notes</label>
       <textarea id="notes" placeholder="Weather, behavior, etc."></textarea>
 
@@ -108,6 +110,13 @@
     const latInput         = document.getElementById("lat");
     const lngInput         = document.getElementById("lng");
     const useLocationBtn   = document.getElementById("useLocationBtn");
+    const weatherInfoEl    = document.getElementById("weatherInfo");
+
+    // we store MET weather snapshot here before saving
+    let lastWeather = null;
+
+    // Base URL of the Netlify function (relative when running on Netlify)
+    const YR_PROXY_URL = "/.netlify/functions/yr-weather";
 
     document.getElementById("backBtn").onclick = () => {
       window.location.href = "index.html";
@@ -115,6 +124,45 @@
     document.getElementById("goLoginBtn").onclick = () => {
       window.location.href = "index.html";
     };
+
+    async function fetchWeatherFromYr(lat, lng) {
+      try {
+        weatherInfoEl.textContent = "Getting weather for this spot...";
+
+        const url = `${YR_PROXY_URL}?lat=${lat}&lon=${lng}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error("Proxy error");
+        }
+        const data = await res.json();
+
+        const temp = typeof data.temperature === "number" ? data.temperature : null;
+        const wind = typeof data.windSpeed === "number" ? data.windSpeed : null;
+        const symbol = data.symbol || null;
+
+        let descParts = [];
+        if (temp != null) descParts.push(`${temp.toFixed(1)} °C`);
+        if (wind != null) descParts.push(`wind ${wind.toFixed(1)} m/s`);
+        if (symbol) descParts.push(symbol.replace(/_/g, " "));
+
+        const description = descParts.join(", ");
+
+        lastWeather = {
+          temp: temp,
+          description: description || null
+        };
+
+        if (description) {
+          weatherInfoEl.textContent = `Weather now (yr.no): ${description}`;
+        } else {
+          weatherInfoEl.textContent = "Weather data not available.";
+        }
+      } catch (err) {
+        console.error(err);
+        weatherInfoEl.textContent = "Could not load weather.";
+        lastWeather = null;
+      }
+    }
 
     onAuthStateChanged(auth, (user) => {
       // hide loading as soon as we know
@@ -133,6 +181,8 @@
       // Handle "Use my location" button
       useLocationBtn.onclick = () => {
         msgEl.textContent = "";
+        weatherInfoEl.textContent = "";
+        lastWeather = null;
 
         if (!navigator.geolocation) {
           msgEl.textContent = "Geolocation is not supported by this browser.";
@@ -142,11 +192,14 @@
         msgEl.textContent = "Getting your location...";
 
         navigator.geolocation.getCurrentPosition(
-          (position) => {
+          async (position) => {
             const { latitude, longitude } = position.coords;
             latInput.value = latitude.toFixed(6);
             lngInput.value = longitude.toFixed(6);
             msgEl.textContent = "Location set.";
+
+            // Fetch current weather for this location via our Netlify proxy
+            await fetchWeatherFromYr(latitude, longitude);
           },
           (error) => {
             console.error(error);
@@ -195,6 +248,8 @@
             notes,
             latitude: isNaN(lat) ? null : lat,
             longitude: isNaN(lng) ? null : lng,
+            weatherTemp: lastWeather?.temp ?? null,
+            weatherDescription: lastWeather?.description ?? null,
             timestamp: Date.now()
           });
 
