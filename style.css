@@ -88,6 +88,8 @@ button:hover {
   background: transparent;
   border: 1px solid #1f8bfd;
   color: #1f8bfd;
+  padding: 8px 18px;
+  border-radius: 25px;
   box-shadow: none;
 }
 
@@ -95,20 +97,21 @@ button:hover {
   background: rgba(31,139,253,0.15);
 }
 
-/************ SMALL PILL BUTTONS **************/
+/************ SMALL PILL BUTTONS (MATCH "Add new spot") **************/
 .tiny-secondary-btn {
   background: transparent;
   border: 1px solid #1f8bfd;
   color: #1f8bfd;
+  padding: 8px 18px;
+  border-radius: 25px;
+  font-size: 0.9rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
-  padding: 6px 14px;
-  border-radius: 25px;
-  font-size: 0.8rem;
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s ease;
 }
 
 .tiny-secondary-btn:hover {
@@ -213,7 +216,7 @@ button:hover {
 .spot-name-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .spot-stats {
@@ -227,29 +230,58 @@ button:hover {
   font-size: 0.85rem;
 }
 
-/************ MISC **************/
+/* Weather line under each spot */
+.spot-weather {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+/************ PREDICTIONS **************/
+.predictions-container {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prediction-item {
+  background: #081119;
+  border-radius: 10px;
+  border: 1px solid #2a3c52;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+
+.prediction-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.prediction-spot-name {
+  font-weight: 600;
+}
+
+.prediction-date {
+  opacity: 0.8;
+  font-size: 0.8rem;
+}
+
+.prediction-weather {
+  opacity: 0.9;
+  margin-bottom: 2px;
+}
+
+.prediction-score {
+  opacity: 0.7;
+  font-size: 0.8rem;
+}
+
+/************ EMPTY STATE **************/
 .empty-state {
   font-size: 0.85rem;
   opacity: 0.7;
   text-align: center;
-}
-
-.catch-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.delete-btn {
-  background: rgba(255,80,80,0.15);
-  border: 1px solid #ff5050;
-  color: #ff5050;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.delete-btn:hover {
-  background: rgba(255,80,80,0.25);
 }
