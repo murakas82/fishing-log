@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fishing Spot – My Fishing Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://www.googleapis.com">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app fade-in">
+    <header>
+      <h1>Fishing spot</h1>
+      <p>View and manage this spot and its catches.</p>
+    </header>
+
+    <!-- LOADING -->
+    <div id="loadingCard" class="loading-spinner-wrapper">
+      <div class="loading-spinner"></div>
+    </div>
+
+    <!-- NOT LOGGED IN -->
+    <div class="card" id="needLogin" style="display:none;">
+      <p>You need to be logged in to view this spot.</p>
+      <button id="goLoginBtn">Back to main page</button>
+    </div>
+
+    <!-- INVALID / NOT FOUND -->
+    <div class="card" id="notFound" style="display:none;">
+      <p>Fishing spot not found.</p>
+      <button id="backBtnNF">Back to main page</button>
+    </div>
+
+    <!-- SPOT CONTENT -->
+    <div class="card" id="spotCard" style="display:none;">
+      <p style="font-size:0.9rem; margin-bottom:10px;">
+        Logged in as <span id="userEmail"></span>
+      </p>
+
+      <h2 class="section-title">Spot details</h2>
+
+      <label>Spot name</label>
+      <input id="spotName" type="text">
+
+      <label>Latitude</label>
+      <input id="lat" type="text">
+
+      <label>Longitude</label>
+      <input id="lng" type="text">
+
+      <div id="mapsLinkContainer" class="catch-meta" style="margin-top:6px;"></div>
+
+      <div id="spotStats" class="spot-stats" style="margin-top:10px;"></div>
+
+      <button id="saveSpotBtn">Save changes</button>
+      <button id="deleteSpotBtn" class="secondary-btn" style="margin-top:6px;">Delete spot</button>
+      <button id="backBtn" class="secondary-btn" style="margin-top:6px;">Back to main page</button>
+
+      <p id="spotMessage" class="auth-message"></p>
+    </div>
+
+    <!-- CATCHES AT THIS SPOT -->
+    <div class="card" id="catchesCard" style="display:none; margin-top:10px;">
+      <h2 class="section-title">Catches at this spot</h2>
+      <div id="catchList" class="catch-list">
+        <p class="empty-state">Loading catches…</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+
+    import {
+      getAuth, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    import {
+      getFirestore,
+      doc, getDoc, updateDoc, deleteDoc,
+      collection, getDocs, query, where
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1656807867882",
+      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    const loadingCard   = document.getElementById("loadingCard");
+    const needLoginCard = document.getElementById("needLogin");
+    const notFoundCard  = document.getElementById("notFound");
+    const spotCard      = document.getElementById("spotCard");
+    const catchesCard   = document.getElementById("catchesCard");
+
+    const userEmailEl   = document.getElementById("userEmail");
+    const spotNameInput = document.getElementById("spotName");
+    const latInput      = document.getElementById("lat");
+    const lngInput      = document.getElementById("lng");
+    const mapsLinkContainer = document.getElementById("mapsLinkContainer");
+    const spotStatsEl   = document.getElementById("spotStats");
+    const spotMsgEl     = document.getElementById("spotMessage");
+    const catchListEl   = document.getElementById("catchList");
+
+    document.getElementById("goLoginBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+    document.getElementById("backBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+    document.getElementById("backBtnNF").onclick = () => {
+      window.location.href = "index.html";
+    };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const spotId = urlParams.get("id");
+
+    if (!spotId) {
+      // no id in URL -> show not found
+      loadingCard.style.display = "none";
+      notFoundCard.style.display = "block";
+    }
+
+    let currentUser = null;
+    let spotDocData = null;
+    let spotCatches = [];
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!spotId) return;
+
+      currentUser = user;
+      if (!user) {
+        loadingCard.style.display = "none";
+        needLoginCard.style.display = "block";
+        return;
+      }
+
+      userEmailEl.textContent = user.email;
+
+      try {
+        await loadSpotAndCatches(user);
+      } catch (err) {
+        console.error(err);
+        loadingCard.style.display = "none";
+        notFoundCard.style.display = "block";
+      }
+    });
+
+    async function loadSpotAndCatches(user) {
+      // Load spot
+      const ref = doc(db, "spots", spotId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        loadingCard.style.display = "none";
+        notFoundCard.style.display = "block";
+        return;
+      }
+
+      const data = snap.data();
+      // Basic check that it belongs to this user
+      if (data.userId && data.userId !== user.uid) {
+        loadingCard.style.display = "none";
+        notFoundCard.style.display = "block";
+        return;
+      }
+
+      spotDocData = { id: snap.id, ...data };
+
+      // Load catches at this spot (by spotId)
+      const q = query(
+        collection(db, "catches"),
+        where("spotId", "==", spotId)
+      );
+      const catchSnap = await getDocs(q);
+      spotCatches = catchSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(c => !c.userId || c.userId === user.uid); // safety filter
+
+      renderSpot();
+      renderCatches();
+
+      loadingCard.style.display = "none";
+      spotCard.style.display    = "block";
+      catchesCard.style.display = "block";
+    }
+
+    function renderSpot() {
+      if (!spotDocData) return;
+
+      spotNameInput.value = spotDocData.name || "";
+      if (typeof spotDocData.latitude === "number") {
+        latInput.value = spotDocData.latitude.toFixed(6);
+      } else {
+        latInput.value = "";
+      }
+      if (typeof spotDocData.longitude === "number") {
+        lngInput.value = spotDocData.longitude.toFixed(6);
+      } else {
+        lngInput.value = "";
+      }
+
+      // Google Maps link
+      const hasCoords =
+        typeof spotDocData.latitude === "number" &&
+        typeof spotDocData.longitude === "number";
+
+      if (hasCoords) {
+        const lat = spotDocData.latitude;
+        const lng = spotDocData.longitude;
+        const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+        mapsLinkContainer.innerHTML = `
+          <a href="${mapsUrl}" target="_blank" class="maps-link">
+            View this spot in Google Maps
+          </a>
+        `;
+      } else {
+        mapsLinkContainer.textContent = "No GPS coordinates saved for this spot.";
+      }
+
+      // Stats for this spot
+      const total = spotCatches.length;
+      if (!total) {
+        spotStatsEl.textContent = "No catches yet at this spot.";
+      } else {
+        let biggest = spotCatches[0];
+        spotCatches.forEach(c => {
+          const w = Number(c.weightKg) || 0;
+          if (w > (Number(biggest.weightKg) || 0)) biggest = c;
+        });
+        const biggestText = `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species || ""}`;
+        spotStatsEl.textContent = `Total catches: ${total} • Biggest: ${biggestText}`;
+      }
+    }
+
+    function renderCatches() {
+      catchListEl.innerHTML = "";
+
+      if (!spotCatches.length) {
+        catchListEl.innerHTML =
+          `<p class="empty-state">You have no catches at this spot yet.</p>`;
+        return;
+      }
+
+      spotCatches
+        .slice()
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+        .forEach(c => {
+          const div = document.createElement("div");
+          div.className = "catch-item";
+
+          const dateStr = c.timestamp
+            ? new Date(c.timestamp).toLocaleDateString()
+            : "";
+
+          const weight =
+            c.weightKg !== undefined && c.weightKg !== null
+              ? `${Number(c.weightKg).toFixed(2)} kg`
+              : "-";
+
+          const lure = c.lure || "-";
+          const depth = c.depth != null ? `${c.depth} m` : "-";
+          const temp = c.temperature != null ? `${c.temperature} °C` : "-";
+
+          let weatherLine = "-";
+          if (typeof c.weatherTemp === "number" && c.weatherDescription) {
+            weatherLine = `${c.weatherTemp.toFixed(1)} °C, ${c.weatherDescription}`;
+          } else if (typeof c.weatherTemp === "number") {
+            weatherLine = `${c.weatherTemp.toFixed(1)} °C`;
+          }
+
+          div.innerHTML = `
+            <div class="catch-top">
+              <span>${c.species || "Unknown species"} • ${weight}</span>
+              <span>${dateStr}</span>
+            </div>
+            <div class="catch-meta">Lure: ${lure}</div>
+            <div class="catch-meta">Depth: ${depth}</div>
+            <div class="catch-meta">Water temp: ${temp}</div>
+            <div class="catch-meta">Weather at time of catch: ${weatherLine}</div>
+            <div class="catch-notes">${c.notes || ""}</div>
+          `;
+
+          const delBtn = document.createElement("button");
+          delBtn.className = "delete-btn";
+          delBtn.textContent = "Delete catch";
+          delBtn.onclick = async () => {
+            if (!confirm("Delete this catch?")) return;
+            try {
+              await deleteDoc(doc(db, "catches", c.id));
+              spotCatches = spotCatches.filter(x => x.id !== c.id);
+              renderCatches();
+              renderSpot();
+            } catch (err) {
+              console.error(err);
+              alert("Error deleting catch.");
+            }
+          };
+
+          div.appendChild(delBtn);
+          catchListEl.appendChild(div);
+        });
+    }
+
+    // SAVE SPOT CHANGES
+    document.getElementById("saveSpotBtn").onclick = async () => {
+      if (!spotDocData || !currentUser) return;
+
+      const newName = spotNameInput.value.trim();
+      const lat = parseFloat(latInput.value);
+      const lng = parseFloat(lngInput.value);
+
+      if (!newName) {
+        spotMsgEl.textContent = "Spot name is required.";
+        return;
+      }
+
+      try {
+        spotMsgEl.textContent = "Saving spot and updating catches…";
+
+        const ref = doc(db, "spots", spotId);
+        await updateDoc(ref, {
+          name: newName,
+          latitude: isNaN(lat) ? null : lat,
+          longitude: isNaN(lng) ? null : lng
+        });
+
+        // Update local copy
+        spotDocData.name = newName;
+        spotDocData.latitude = isNaN(lat) ? null : lat;
+        spotDocData.longitude = isNaN(lng) ? null : lng;
+
+        // Update spotName in all catches of this spot
+        for (const c of spotCatches) {
+          const cref = doc(db, "catches", c.id);
+          await updateDoc(cref, { spotName: newName });
+          c.spotName = newName;
+        }
+
+        renderSpot();
+        spotMsgEl.textContent = "Spot updated.";
+      } catch (err) {
+        console.error(err);
+        spotMsgEl.textContent = "Error saving spot.";
+      }
+    };
+
+    // DELETE SPOT (only if no catches)
+    document.getElementById("deleteSpotBtn").onclick = async () => {
+      if (!spotDocData || !currentUser) return;
+
+      if (spotCatches.length > 0) {
+        spotMsgEl.textContent =
+          "You must delete all catches at this spot before deleting the spot.";
+        return;
+      }
+
+      if (!confirm("Delete this spot? This cannot be undone.")) return;
+
+      try {
+        await deleteDoc(doc(db, "spots", spotId));
+        window.location.href = "index.html";
+      } catch (err) {
+        console.error(err);
+        spotMsgEl.textContent = "Error deleting spot.";
+      }
+    };
+  </script>
+</body>
+</html>
