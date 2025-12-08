@@ -71,8 +71,6 @@
 
         <div id="spotsContainer" class="spots-container"></div>
       </div>
-
-      <!-- (REMOVED THE BOTTOM ADD CATCH BUTTON) -->
     </div>
   </div>
 
@@ -136,7 +134,6 @@
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-    /* NAVIGATION */
     document.getElementById("goAddSpotBtn").onclick = () =>
       window.location.href = "add-spot.html";
 
@@ -213,7 +210,63 @@
       statsEl.appendChild(container);
     }
 
-    /* RENDER SPOTS */
+    // 🔎 Map Open-Meteo weather codes to icon + label
+    function getWeatherIconAndLabel(code) {
+      if (code === 0) return { icon: "☀️", label: "Clear sky" };
+      if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
+      if (code === 2) return { icon: "⛅", label: "Partly cloudy" };
+      if (code === 3) return { icon: "☁️", label: "Overcast" };
+      if (code === 45 || code === 48) return { icon: "🌫️", label: "Fog" };
+      if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Drizzle" };
+      if (code >= 61 && code <= 67) return { icon: "🌧️", label: "Rain" };
+      if (code >= 71 && code <= 77) return { icon: "🌨️", label: "Snow" };
+      if (code >= 80 && code <= 82) return { icon: "🌦️", label: "Rain showers" };
+      if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Snow showers" };
+      if (code === 95) return { icon: "⛈️", label: "Thunderstorm" };
+      if (code === 96 || code === 99) return { icon: "⛈️", label: "Thunderstorm with hail" };
+      return { icon: "❓", label: "Unknown weather" };
+    }
+
+    /* WEATHER HELPER: Open-Meteo (km/h → m/s, icons + text) */
+    async function fetchWeatherForSpot(lat, lng, el) {
+      try {
+        el.textContent = "Weather: loading…";
+
+        const url =
+          `https://api.open-meteo.com/v1/forecast` +
+          `?latitude=${lat}&longitude=${lng}` +
+          `&current_weather=true`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Open-Meteo error");
+
+        const data = await res.json();
+        const cw = data.current_weather || {};
+
+        const temp    = typeof cw.temperature === "number" ? cw.temperature : null;
+        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
+        const windMs  = windKmh != null ? windKmh / 3.6 : null;
+        const code    = cw.weathercode;
+
+        const { icon, label } = getWeatherIconAndLabel(code);
+
+        const parts = [];
+        if (label)         parts.push(label);
+        if (temp != null)  parts.push(`${temp.toFixed(1)} °C`);
+        if (windMs != null) parts.push(`wind ${windMs.toFixed(1)} m/s`);
+
+        const text = parts.join(", ");
+
+        el.textContent = text
+          ? `Weather now: ${icon} ${text}`
+          : "Weather: not available";
+      } catch (err) {
+        console.error(err);
+        el.textContent = "Weather: failed to load";
+      }
+    }
+
+    /* RENDER SPOTS WITH CURRENT WEATHER */
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
       spotsEl.innerHTML = "";
@@ -255,14 +308,13 @@
           block.innerHTML = `
             <div class="spot-header">
               <div class="spot-name-buttons">
-
-                <!-- Spot name button -->
+                <!-- Spot name -->
                 <a class="tiny-secondary-btn"
                    href="spot.html?id=${encodeURIComponent(spot.id)}">
-                   ${spot.name}
+                   ${spot.name || "Unnamed spot"}
                 </a>
 
-                <!-- Google Maps button -->
+                <!-- Google Maps -->
                 ${
                   hasCoords
                     ? `<a class="tiny-secondary-btn" href="${mapsLink}" target="_blank">
@@ -271,7 +323,7 @@
                     : ""
                 }
 
-                <!-- Add catch button (per spot) -->
+                <!-- Add catch for this spot -->
                 <a class="tiny-secondary-btn"
                    href="add-catch.html?spotId=${encodeURIComponent(spot.id)}">
                    Add catch
@@ -282,7 +334,16 @@
             </div>
 
             <div class="spot-stats">${statsLine}</div>
+            <div class="spot-weather"></div>
           `;
+
+          const weatherEl = block.querySelector(".spot-weather");
+
+          if (hasCoords) {
+            fetchWeatherForSpot(spot.latitude, spot.longitude, weatherEl);
+          } else {
+            weatherEl.textContent = "Weather: no GPS for this spot";
+          }
 
           spotsEl.appendChild(block);
         });
