@@ -1,135 +1,142 @@
-
-/* Basic reset */
-* {
-  box-sizing: border-box;
+/* Base layout */
+body {
   margin: 0;
   padding: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-body {
-  background: #0b1724;
-  color: #f5f5f5;
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
+  background: #061018;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
 }
 
 .app {
-  width: 100%;
-  max-width: 480px;
+  max-width: 600px;
+  margin: 0 auto;
   padding: 16px;
 }
 
-/* Fade-in animation */
 .fade-in {
-  opacity: 0;
-  animation: fadeIn 0.25s ease-out forwards;
+  animation: fadeIn 0.4s ease-out;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
+/************ HEADER **************/
 header {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 header h1 {
-  font-size: 1.6rem;
-  margin-bottom: 4px;
+  margin: 0 0 4px 0;
 }
 
 header p {
-  font-size: 0.9rem;
-  opacity: 0.8;
+  margin: 0;
+  opacity: 0.7;
 }
 
+/************ CARDS **************/
 .card {
-  background: #111d2b;
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  background: #0c1824;
+  padding: 16px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #1d3347;
 }
 
-.section-title {
-  font-size: 1.1rem;
-  margin-bottom: 8px;
-}
-
+/************ INPUTS **************/
 label {
-  font-size: 0.9rem;
   display: block;
+  margin-top: 12px;
   margin-bottom: 4px;
+  font-size: 0.9rem;
+  opacity: 0.85;
 }
 
-input,
-textarea {
+input, select, textarea {
   width: 100%;
-  padding: 8px 10px;
-  margin-bottom: 10px;
-  border-radius: 8px;
-  border: 1px solid #2a3c52;
+  padding: 10px;
   background: #081119;
-  color: #f5f5f5;
-  font-size: 0.95rem;
+  border: 1px solid #2a3c52;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
 }
 
 textarea {
+  min-height: 80px;
   resize: vertical;
-  min-height: 60px;
 }
 
+/************ BUTTONS **************/
 button {
-  padding: 10px;
-  border-radius: 999px;
-  border: none;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
   background: #1f8bfd;
-  color: white;
-  box-shadow: 0 4px 10px rgba(31,139,253,0.4);
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 1rem;
 }
 
-button:active {
-  transform: translateY(1px);
-  box-shadow: 0 2px 6px rgba(31,139,253,0.4);
+button:hover {
+  background: #3ea0ff;
 }
 
-/* Secondary / outline button */
 .secondary-btn {
   background: transparent;
-  color: #1f8bfd;
   border: 1px solid #1f8bfd;
+  color: #1f8bfd;
   box-shadow: none;
 }
 
-.secondary-btn:active {
-  box-shadow: none;
+.secondary-btn:hover {
+  background: rgba(31,139,253,0.15);
 }
 
-/* Auth UI */
+/************ SMALL PILL BUTTONS **************/
+.tiny-secondary-btn {
+  background: transparent;
+  border: 1px solid #1f8bfd;
+  color: #1f8bfd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  padding: 6px 14px;
+  border-radius: 25px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tiny-secondary-btn:hover {
+  background: rgba(31,139,253,0.15);
+}
+
+/************ AUTH **************/
 .auth-buttons {
   display: flex;
-  gap: 8px;
-  margin-top: 4px;
-  margin-bottom: 4px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .auth-message {
-  font-size: 0.8rem;
-  margin-top: 4px;
-  min-height: 1.2em;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #ff9090;
 }
 
-/* Logged-in user bar */
+/************ USER CARD **************/
 .user-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.user-email {
+  font-weight: 600;
 }
 
 .user-label {
@@ -137,22 +144,11 @@ button:active {
   opacity: 0.7;
 }
 
-.user-email {
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-/* Nav pills (Add catch / Your catches) */
-.nav-pill {
-  width: 100%;
-}
-
-/* Loading spinner */
+/************ LOADING SPINNER **************/
 .loading-spinner-wrapper {
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 24px 0;
+  padding: 40px 0;
 }
 
 .loading-spinner {
@@ -168,215 +164,43 @@ button:active {
   to { transform: rotate(360deg); }
 }
 
-/* Catch list */
-.catch-list {
-  margin-top: 8px;
-}
-
-.catch-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.95rem;
-}
-
-.catch-top {
-  display: flex;
-  justify-content: space-between;
-  font-weight: 600;
-}
-
-.catch-meta {
-  font-size: 0.8rem;
-  opacity: 0.8;
-}
-
-.catch-notes {
-  font-size: 0.8rem;
-  margin-top: 4px;
-}
-
-.empty-state {
-  font-size: 0.9rem;
-  opacity: 0.8;
-  text-align: left;
-  padding: 8px 0;
-}
-
-/* Delete button */
-.delete-btn {
-  background: #d9534f;
-  box-shadow: 0 3px 8px rgba(217, 83, 79, 0.4);
-  font-size: 0.85rem;
-  padding: 6px 14px;
-  align-self: flex-end;
-  margin-top: 4px;
-}
-
-.delete-btn:active {
-  box-shadow: 0 1px 4px rgba(217, 83, 79, 0.4);
-}
-
-/* Stats section */
-.stats-container {
-  margin-top: 8px;
-}
-
-.stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-
+/************ STATS **************/
 .stat-pill {
-  background: #081119;
-  border-radius: 999px;
-  padding: 6px 10px;
-  border: 1px solid #2a3c52;
-  font-size: 0.8rem;
   display: inline-flex;
-  gap: 6px;
+  padding: 6px 12px;
+  background: #13202f;
+  border-radius: 20px;
+  margin-right: 6px;
+  margin-bottom: 6px;
 }
 
 .stat-label {
   opacity: 0.7;
+  margin-right: 6px;
 }
 
 .stat-value {
   font-weight: 600;
 }
 
-
-/* My fishing spots layout */
-.spots-container {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.spot-block {
-  background: #081119;
-  border-radius: 10px;
-  padding: 8px 10px;
-  border: 1px solid #2a3c52;
-}
-
-.spot-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.spot-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.spot-count {
-  font-size: 0.8rem;
-  opacity: 0.7;
-}
-
-.spot-catches {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 2px;
-}
-
-.spot-catch-main {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.9rem;
-}
-
-.spot-catch-sub {
-  font-size: 0.8rem;
-  opacity: 0.8;
-}
-
-/* My fishing spots layout */
-.spots-container {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.spot-block {
-  background: #081119;
-  border-radius: 10px;
-  padding: 8px 10px;
-  border: 1px solid #2a3c52;
-}
-
-.spot-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.spot-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.spot-count {
-  font-size: 0.8rem;
-  opacity: 0.7;
-}
-
-.spot-catches {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 2px;
-}
-
-.spot-catch-main {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.9rem;
-}
-
-.spot-catch-sub {
-  font-size: 0.8rem;
-  opacity: 0.8;
-}
-
-/* Header row inside spots card */
+/************ SPOTS LIST **************/
 .spots-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* Small secondary button for header actions */
-.tiny-secondary-btn {
-  background: transparent;
-  color: #1f8bfd;
-  border: 1px solid #1f8bfd;
-  box-shadow: none;
-  padding: 6px 10px;
-  font-size: 0.8rem;
-}
-
-/* My fishing spots layout */
 .spots-container {
-  margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .spot-block {
   background: #081119;
+  padding: 12px;
   border-radius: 10px;
-  padding: 8px 10px;
   border: 1px solid #2a3c52;
 }
 
@@ -384,132 +208,48 @@ button:active {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 4px;
-}
-
-.spot-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.spot-coords {
-  font-size: 0.75rem;
-  opacity: 0.7;
-}
-
-.spot-count {
-  font-size: 0.8rem;
-  opacity: 0.7;
-}
-
-.spot-catches {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 2px;
-}
-
-.spot-catch-main {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.9rem;
-}
-
-.spot-catch-sub {
-  font-size: 0.8rem;
-  opacity: 0.8;
-}
-
-.spots-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.tiny-secondary-btn {
-  background: transparent;
-  color: #1f8bfd;
-  border: 1px solid #1f8bfd;
-  box-shadow: none;
-  padding: 6px 10px;
-  font-size: 0.8rem;
-}
-
-/* Spots layout */
-.spots-container {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.spot-block {
-  background: #081119;
-  border-radius: 10px;
-  padding: 8px 10px;
-  border: 1px solid #2a3c52;
-}
-
-.spot-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 4px;
-}
-
-.spot-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.spot-name-link {
-  color: #ffffff;
-  text-decoration: none;
-}
-
-.spot-name-link:hover {
-  text-decoration: underline;
-}
-
-.spot-coords {
-  font-size: 0.75rem;
-  opacity: 0.7;
-}
-
-.spot-count {
-  font-size: 0.8rem;
-  opacity: 0.7;
-}
-
-.spot-stats {
-  font-size: 0.8rem;
-  opacity: 0.85;
-  margin-top: 2px;
-}
-
-.maps-link {
-  color: #4dabff;
-  text-decoration: underline;
-}
-
-.hint-text {
-  font-size: 0.8rem;
-  opacity: 0.7;
-  margin-top: 4px;
-  margin-bottom: 8px;
 }
 
 .spot-name-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
-/* Make tiny-secondary-btn also work nicely on <a> elements */
-.tiny-secondary-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none; /* remove underline on links */
+.spot-stats {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  margin-top: 6px;
 }
 
+.spot-count {
+  opacity: 0.8;
+  font-size: 0.85rem;
+}
+
+/************ MISC **************/
+.empty-state {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  text-align: center;
+}
+
+.catch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.delete-btn {
+  background: rgba(255,80,80,0.15);
+  border: 1px solid #ff5050;
+  color: #ff5050;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  background: rgba(255,80,80,0.25);
+}
