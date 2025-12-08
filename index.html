@@ -285,32 +285,35 @@
             statsLine = `Total catches: ${total} • Biggest: ${biggestText}`;
           }
 
-          const hasCoords =
-            typeof spot.latitude === "number" && typeof spot.longitude === "number";
+         const hasCoords =
+  typeof spot.latitude === "number" && typeof spot.longitude === "number";
 
-          const mapsLink = hasCoords
-            ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
-            : "";
+const mapsLink = hasCoords
+  ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
+  : "";
 
-          const header = document.createElement("div");
-          header.className = "spot-header";
+const header = document.createElement("div");
+header.className = "spot-header";
 
-          header.innerHTML = `
-            <div>
-              <div class="spot-name">
-                <a class="spot-name-link" href="spot.html?id=${encodeURIComponent(spot.id)}">
-                  ${spot.name || "Unnamed spot"}
-                </a>
-              </div>
-              ${hasCoords ? `
-                <div class="spot-coords">
-                  ${spot.latitude.toFixed(4)}, ${spot.longitude.toFixed(4)}
-                  · <a href="${mapsLink}" target="_blank" class="maps-link">Google Maps</a>
-                </div>
-              ` : ""}
-            </div>
-            <div class="spot-count">${total} catch${total === 1 ? "" : "es"}</div>
-          `;
+header.innerHTML = `
+  <div class="spot-name-buttons">
+    <a
+      class="tiny-secondary-btn spot-link-btn"
+      href="spot.html?id=${encodeURIComponent(spot.id)}"
+    >
+      ${spot.name || "Unnamed spot"}
+    </a>
+    ${
+      hasCoords
+        ? `<a class="tiny-secondary-btn spot-link-btn" href="${mapsLink}" target="_blank">
+             Google Maps
+           </a>`
+        : ""
+    }
+  </div>
+  <div class="spot-count">${total} catch${total === 1 ? "" : "es"}</div>
+`;
+
 
           block.appendChild(header);
 
@@ -368,3 +371,4 @@
   </script>
 </body>
 </html>
+
