@@ -95,7 +95,7 @@
       where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // 🔧 Firebase config (same as other pages)
+    // 🔧 Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -122,7 +122,7 @@
     const weatherInfoEl    = document.getElementById("weatherInfo");
     const saveCatchBtn     = document.getElementById("saveCatchBtn");
 
-    let lastWeather = null;   // { temp, windMs, description }
+    let lastWeather = null;   // { temp, windMs, label, fullText }
     let savedSpots  = [];     // spots from Firestore
 
     document.getElementById("backBtn").onclick = () => {
@@ -132,7 +132,24 @@
       window.location.href = "index.html";
     };
 
-    // 🔥 Open-Meteo weather fetch (windspeed fixed to m/s)
+    // 🔎 Map Open-Meteo weather codes to icon + label
+    function getWeatherIconAndLabel(code) {
+      if (code === 0) return { icon: "☀️", label: "Clear sky" };
+      if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
+      if (code === 2) return { icon: "⛅", label: "Partly cloudy" };
+      if (code === 3) return { icon: "☁️", label: "Overcast" };
+      if (code === 45 || code === 48) return { icon: "🌫️", label: "Fog" };
+      if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Drizzle" };
+      if (code >= 61 && code <= 67) return { icon: "🌧️", label: "Rain" };
+      if (code >= 71 && code <= 77) return { icon: "🌨️", label: "Snow" };
+      if (code >= 80 && code <= 82) return { icon: "🌦️", label: "Rain showers" };
+      if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Snow showers" };
+      if (code === 95) return { icon: "⛈️", label: "Thunderstorm" };
+      if (code === 96 || code === 99) return { icon: "⛈️", label: "Thunderstorm with hail" };
+      return { icon: "❓", label: "Unknown weather" };
+    }
+
+    // 🔥 Open-Meteo weather fetch (windspeed km/h → m/s, plus icon + text)
     async function fetchWeather(lat, lng) {
       try {
         weatherInfoEl.textContent = "Getting weather for this spot...";
@@ -156,23 +173,25 @@
         const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
         const windMs  = windKmh != null ? windKmh / 3.6 : null;
 
-        const code = cw.weathercode; // numeric weather code
+        const code = cw.weathercode;
+        const { icon, label } = getWeatherIconAndLabel(code);
 
-        let descParts = [];
-        if (temp != null)    descParts.push(`${temp.toFixed(1)} °C`);
-        if (windMs != null)  descParts.push(`wind ${windMs.toFixed(1)} m/s`);
-        if (code != null)    descParts.push(`code ${code}`);
+        const parts = [];
+        if (label)           parts.push(label);
+        if (temp != null)    parts.push(`${temp.toFixed(1)} °C`);
+        if (windMs != null)  parts.push(`wind ${windMs.toFixed(1)} m/s`);
 
-        const description = descParts.join(", ");
+        const fullText = parts.join(", ");
 
         lastWeather = {
-          temp: temp,
-          windMs: windMs,
-          description: description || null
+          temp,
+          windMs,
+          label,
+          fullText
         };
 
-        if (description) {
-          weatherInfoEl.textContent = `Weather now (Open-Meteo): ${description}`;
+        if (fullText) {
+          weatherInfoEl.textContent = `Weather now: ${icon} ${fullText}`;
         } else {
           weatherInfoEl.textContent = "Weather data not available.";
         }
@@ -368,7 +387,8 @@
             longitude: isNaN(lng) ? null : lng,
             weatherTemp: lastWeather?.temp ?? null,
             weatherWindMs: lastWeather?.windMs ?? null,
-            weatherDescription: lastWeather?.description ?? null,
+            weatherCondition: lastWeather?.label ?? null,
+            weatherDescription: lastWeather?.fullText ?? null,
             timestamp: Date.now()
           });
 
