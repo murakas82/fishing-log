@@ -37,7 +37,9 @@
       <input id="weight" type="number" step="0.01" placeholder="2.4">
 
       <label>Spot name</label>
-      <input id="spot" type="text" placeholder="Lake X…">
+      <!-- Text input with dropdown suggestions from saved spots -->
+      <input id="spot" type="text" list="spotList" placeholder="Lake X…">
+      <datalist id="spotList"></datalist>
 
       <label>Lure</label>
       <input id="lure" type="text" placeholder="Spinner, Jig, Worm…">
@@ -48,11 +50,11 @@
       <label>Water temperature (°C)</label>
       <input id="temp" type="number" step="0.1" placeholder="12.8">
 
-      <label>Latitude (auto from GPS)</label>
-      <input id="lat" type="text" placeholder="Not set" readonly>
+      <label>Latitude (auto from GPS or spot)</label>
+      <input id="lat" type="text" placeholder="Not set">
 
-      <label>Longitude (auto from GPS)</label>
-      <input id="lng" type="text" placeholder="Not set" readonly>
+      <label>Longitude (auto from GPS or spot)</label>
+      <input id="lng" type="text" placeholder="Not set">
 
       <button id="useLocationBtn" type="button" class="secondary-btn" style="margin-bottom:10px;">
         Use my location
@@ -85,7 +87,12 @@
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     import {
-      getFirestore, collection, addDoc
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      query,
+      where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -107,13 +114,18 @@
     const userEmailEl      = document.getElementById("userEmail");
     const msgEl            = document.getElementById("formMessage");
 
+    const spotInput        = document.getElementById("spot");
+    const spotListEl       = document.getElementById("spotList");
+
     const latInput         = document.getElementById("lat");
     const lngInput         = document.getElementById("lng");
     const useLocationBtn   = document.getElementById("useLocationBtn");
     const weatherInfoEl    = document.getElementById("weatherInfo");
 
-    // we store MET weather snapshot here before saving
+    // store MET weather snapshot here before saving
     let lastWeather = null;
+    // store saved spots for quick lookup
+    let savedSpots = [];
 
     // Base URL of the Netlify function (relative when running on Netlify)
     const YR_PROXY_URL = "/.netlify/functions/yr-weather";
@@ -164,7 +176,58 @@
       }
     }
 
-    onAuthStateChanged(auth, (user) => {
+    async function loadSpotsForUser(user) {
+      try {
+        const q = query(
+          collection(db, "spots"),
+          where("userId", "==", user.uid)
+        );
+        const snap = await getDocs(q);
+        savedSpots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        const uniqueNames = new Set();
+        spotListEl.innerHTML = "";
+
+        savedSpots.forEach(spot => {
+          const name = (spot.name || "").trim();
+          if (!name || uniqueNames.has(name)) return;
+          uniqueNames.add(name);
+
+          const opt = document.createElement("option");
+          opt.value = name;
+          spotListEl.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("Error loading spots", err);
+      }
+    }
+
+    // When user chooses a spot name, auto-fill coordinates (and weather)
+    spotInput.addEventListener("change", async () => {
+      const name = spotInput.value.trim().toLowerCase();
+      if (!name) return;
+
+      const match = savedSpots.find(
+        s => (s.name || "").trim().toLowerCase() === name
+      );
+      if (!match) return;
+
+      if (typeof match.latitude === "number") {
+        latInput.value = match.latitude.toFixed(6);
+      }
+      if (typeof match.longitude === "number") {
+        lngInput.value = match.longitude.toFixed(6);
+      }
+
+      if (
+        typeof match.latitude === "number" &&
+        typeof match.longitude === "number"
+      ) {
+        await fetchWeatherFromYr(match.latitude, match.longitude);
+      }
+    });
+
+    onAuthStateChanged(auth, async (user) => {
       // hide loading as soon as we know
       loadingCard.style.display = "none";
 
@@ -177,6 +240,9 @@
       needLogin.style.display        = "none";
       protectedContent.style.display = "block";
       userEmailEl.textContent        = user.email;
+
+      // Load saved spots for dropdown
+      await loadSpotsForUser(user);
 
       // Handle "Use my location" button
       useLocationBtn.onclick = () => {
@@ -222,7 +288,7 @@
 
         const species = document.getElementById("species").value.trim();
         const weight  = parseFloat(document.getElementById("weight").value);
-        const spot    = document.getElementById("spot").value.trim();
+        const spot    = spotInput.value.trim();
         const lure    = document.getElementById("lure").value.trim();
         const depth   = parseFloat(document.getElementById("depth").value);
         const temp    = parseFloat(document.getElementById("temp").value);
