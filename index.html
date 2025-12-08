@@ -72,10 +72,7 @@
         <div id="spotsContainer" class="spots-container"></div>
       </div>
 
-      <!-- ADD CATCH (GLOBAL BUTTON) -->
-      <div class="card">
-        <button id="goAddCatchBtn" class="tiny-secondary-btn">Add catch</button>
-      </div>
+      <!-- (REMOVED THE BOTTOM ADD CATCH BUTTON) -->
     </div>
   </div>
 
@@ -142,9 +139,6 @@
     /* NAVIGATION */
     document.getElementById("goAddSpotBtn").onclick = () =>
       window.location.href = "add-spot.html";
-
-    document.getElementById("goAddCatchBtn").onclick = () =>
-      window.location.href = "add-catch.html";
 
     /* AUTH STATE HANDLING */
     onAuthStateChanged(auth, async (user) => {
@@ -261,11 +255,14 @@
           block.innerHTML = `
             <div class="spot-header">
               <div class="spot-name-buttons">
+
+                <!-- Spot name button -->
                 <a class="tiny-secondary-btn"
                    href="spot.html?id=${encodeURIComponent(spot.id)}">
                    ${spot.name}
                 </a>
 
+                <!-- Google Maps button -->
                 ${
                   hasCoords
                     ? `<a class="tiny-secondary-btn" href="${mapsLink}" target="_blank">
@@ -274,7 +271,7 @@
                     : ""
                 }
 
-                <!-- NEW ADD CATCH BUTTON -->
+                <!-- Add catch button (per spot) -->
                 <a class="tiny-secondary-btn"
                    href="add-catch.html?spotId=${encodeURIComponent(spot.id)}">
                    Add catch
