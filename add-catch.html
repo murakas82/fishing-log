@@ -98,6 +98,7 @@
       where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
+    // 🔧 Your Firebase config (same as other pages)
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -124,13 +125,10 @@
     const weatherInfoEl    = document.getElementById("weatherInfo");
     const saveCatchBtn     = document.getElementById("saveCatchBtn");
 
-    // store MET weather snapshot here before saving
+    // store weather snapshot here before saving
     let lastWeather = null;
-    // store saved spots for quick lookup
+    // saved spots from Firestore
     let savedSpots = [];
-
-    // Base URL of the Netlify function (relative when running on Netlify)
-    const YR_PROXY_URL = "/.netlify/functions/yr-weather";
 
     document.getElementById("backBtn").onclick = () => {
       window.location.href = "index.html";
@@ -139,25 +137,32 @@
       window.location.href = "index.html";
     };
 
-    async function fetchWeatherFromYr(lat, lng) {
+    // 🔥 Open-Meteo weather fetch (no key, works on GitHub Pages)
+    async function fetchWeather(lat, lng) {
       try {
         weatherInfoEl.textContent = "Getting weather for this spot...";
 
-        const url = `${YR_PROXY_URL}?lat=${lat}&lon=${lng}`;
+        const url =
+          `https://api.open-meteo.com/v1/forecast` +
+          `?latitude=${lat}&longitude=${lng}` +
+          `&current_weather=true`;
+
         const res = await fetch(url);
         if (!res.ok) {
-          throw new Error("Proxy error");
+          throw new Error("Open-Meteo error");
         }
-        const data = await res.json();
 
-        const temp = typeof data.temperature === "number" ? data.temperature : null;
-        const wind = typeof data.windSpeed === "number" ? data.windSpeed : null;
-        const symbol = data.symbol || null;
+        const data = await res.json();
+        const cw = data.current_weather || {};
+
+        const temp = typeof cw.temperature === "number" ? cw.temperature : null;
+        const wind = typeof cw.windspeed === "number" ? cw.windspeed : null;
+        const code = cw.weathercode; // numeric weather code
 
         let descParts = [];
         if (temp != null) descParts.push(`${temp.toFixed(1)} °C`);
         if (wind != null) descParts.push(`wind ${wind.toFixed(1)} m/s`);
-        if (symbol) descParts.push(symbol.replace(/_/g, " "));
+        if (code != null) descParts.push(`code ${code}`);
 
         const description = descParts.join(", ");
 
@@ -167,7 +172,7 @@
         };
 
         if (description) {
-          weatherInfoEl.textContent = `Weather now (yr.no): ${description}`;
+          weatherInfoEl.textContent = `Weather now (Open-Meteo): ${description}`;
         } else {
           weatherInfoEl.textContent = "Weather data not available.";
         }
@@ -196,12 +201,11 @@
             const name = (spot.name || "").trim();
             if (!name) return;
             const opt = document.createElement("option");
-            opt.value = spot.id;       // use id as value
+            opt.value = spot.id;       // we store the document id
             opt.textContent = name;
             spotSelect.appendChild(opt);
           });
 
-        // If there are no spots, disable saving and show message
         if (!savedSpots.length) {
           msgEl.textContent =
             "You don't have any fishing spots yet. Go back to the main page and add one first.";
@@ -218,7 +222,7 @@
       }
     }
 
-    // When user chooses a spot, auto-fill coordinates (and weather)
+    // When user chooses a saved spot, auto-fill coordinates + weather
     spotSelect.addEventListener("change", async () => {
       weatherInfoEl.textContent = "";
       lastWeather = null;
@@ -244,12 +248,12 @@
         typeof match.latitude === "number" &&
         typeof match.longitude === "number"
       ) {
-        await fetchWeatherFromYr(match.latitude, match.longitude);
+        await fetchWeather(match.latitude, match.longitude);
       }
     });
 
     onAuthStateChanged(auth, async (user) => {
-      // hide loading as soon as we know
+      // hide loading once we know
       loadingCard.style.display = "none";
 
       if (!user) {
@@ -265,7 +269,7 @@
       // Load saved spots for dropdown
       await loadSpotsForUser(user);
 
-      // Handle "Use my location" button
+      // "Use my location" button
       useLocationBtn.onclick = () => {
         msgEl.textContent = "";
         weatherInfoEl.textContent = "";
@@ -285,7 +289,7 @@
             lngInput.value = longitude.toFixed(6);
             msgEl.textContent = "Location set.";
 
-            await fetchWeatherFromYr(latitude, longitude);
+            await fetchWeather(latitude, longitude);
           },
           (error) => {
             console.error(error);
@@ -303,6 +307,7 @@
         );
       };
 
+      // Save catch
       saveCatchBtn.onclick = async () => {
         msgEl.textContent = "";
 
@@ -336,7 +341,7 @@
             species,
             weightKg: weight,
             spotName,
-            spotId,  // keep link to spot document
+            spotId,  // link to spot document
             lure,
             depth,
             temperature: temp,
