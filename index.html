@@ -53,7 +53,7 @@
       </div>
     </div>
 
-    <!-- MAIN CONTENT: stats + nav + spots -->
+    <!-- MAIN CONTENT: stats + spots + nav -->
     <div id="appContent" style="display:none;">
 
       <!-- STATS -->
@@ -66,9 +66,12 @@
 
       <!-- MY FISHING SPOTS -->
       <div class="card" id="spotsCard">
-        <h2 class="section-title">My fishing spots</h2>
+        <div class="spots-header-row">
+          <h2 class="section-title">My fishing spots</h2>
+          <button id="goAddSpotBtn" class="tiny-secondary-btn">Add new spot</button>
+        </div>
         <div id="spotsContainer" class="spots-container">
-          <p class="empty-state">No spots yet – add a catch with a spot name.</p>
+          <p class="empty-state">No spots yet – create one or add a catch with a spot name.</p>
         </div>
       </div>
 
@@ -117,6 +120,7 @@
 
     let currentUser = null;
     let catches = [];
+    let spots   = [];
 
     // --- DOM SHORTCUTS ---
     const loadingCard = document.getElementById("loadingCard");
@@ -157,6 +161,9 @@
     document.getElementById("goCatchesBtn").onclick = () => {
       window.location.href = "catches.html";
     };
+    document.getElementById("goAddSpotBtn").onclick = () => {
+      window.location.href = "add-spot.html";
+    };
 
     // --- AUTH STATE HANDLER (no flicker) ---
     onAuthStateChanged(auth, async (user) => {
@@ -170,29 +177,39 @@
         userCard.style.display   = "block";
         appContent.style.display = "block";
         userEmailEl.textContent  = user.email;
-        await loadCatchesForStats();
+
+        await Promise.all([loadCatches(), loadSpots()]);
+        renderStats();
+        renderSpots();
       } else {
         authCard.style.display   = "block";
         userCard.style.display   = "none";
         appContent.style.display = "none";
         catches = [];
-        renderStats();
-        renderSpots();
+        spots   = [];
       }
     });
 
     // --- LOAD CATCHES (FOR STATS + SPOTS) ---
-    async function loadCatchesForStats() {
+    async function loadCatches() {
       if (!currentUser) return;
-
       const q = query(
         collection(db, "catches"),
         where("userId", "==", currentUser.uid)
       );
       const snap = await getDocs(q);
       catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderStats();
-      renderSpots();
+    }
+
+    // --- LOAD SPOTS (FROM 'spots' COLLECTION) ---
+    async function loadSpots() {
+      if (!currentUser) return;
+      const q = query(
+        collection(db, "spots"),
+        where("userId", "==", currentUser.uid)
+      );
+      const snap = await getDocs(q);
+      spots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 
     // --- RENDER STATS ---
@@ -238,86 +255,159 @@
     // --- RENDER "MY FISHING SPOTS" ---
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
-      if (!spotsEl) return;
-
       spotsEl.innerHTML = "";
 
-      if (!catches.length) {
-        spotsEl.innerHTML = `<p class="empty-state">No spots yet – add a catch with a spot name.</p>`;
+      // If no saved spots and no catches
+      if (!spots.length && !catches.length) {
+        spotsEl.innerHTML =
+          `<p class="empty-state">No spots yet – use “Add new spot” to create one.</p>`;
         return;
       }
 
-      // Group catches by spot name (or "Unnamed spot")
-      const groups = new Map();
+      // Build map from catches by normalized spot name
+      const normalize = (name) => (name || "").trim().toLowerCase() || "unnamed spot";
+
+      const catchGroups = new Map();
       catches.forEach(c => {
-        const name = (c.spotName && c.spotName.trim()) || "Unnamed spot";
-        if (!groups.has(name)) groups.set(name, []);
-        groups.get(name).push(c);
+        const key = normalize(c.spotName || "Unnamed spot");
+        if (!catchGroups.has(key)) catchGroups.set(key, []);
+        catchGroups.get(key).push(c);
       });
 
-      // Sort spots by number of catches (desc)
-      const entries = Array.from(groups.entries());
-      entries.sort((a, b) => b[1].length - a[1].length);
+      // If there are spots in the 'spots' collection, use those
+      if (spots.length) {
+        // Sort spots by name
+        const sortedSpots = spots.slice().sort((a, b) =>
+          (a.name || "").localeCompare(b.name || "")
+        );
 
-      entries.forEach(([spotName, list]) => {
-        const block = document.createElement("div");
-        block.className = "spot-block";
+        sortedSpots.forEach(spot => {
+          const key = normalize(spot.name || "Unnamed spot");
+          const list = catchGroups.get(key) || [];
 
-        const header = document.createElement("div");
-        header.className = "spot-header";
-        header.innerHTML = `
-          <div class="spot-name">${spotName}</div>
-          <div class="spot-count">${list.length} catch${list.length > 1 ? "es" : ""}</div>
-        `;
-        block.appendChild(header);
+          const block = document.createElement("div");
+          block.className = "spot-block";
 
-        const catchesList = document.createElement("div");
-        catchesList.className = "spot-catches";
+          const header = document.createElement("div");
+          header.className = "spot-header";
 
-        // Sort catches by newest first
-        list
-          .slice()
-          .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-          .forEach(c => {
-            const item = document.createElement("div");
-            item.className = "spot-catch";
-
-            const dateStr = c.timestamp
-              ? new Date(c.timestamp).toLocaleDateString()
+          const coordPart =
+            typeof spot.latitude === "number" && typeof spot.longitude === "number"
+              ? `${spot.latitude.toFixed(4)}, ${spot.longitude.toFixed(4)}`
               : "";
 
-            const weight =
-              c.weightKg !== undefined && c.weightKg !== null
-                ? `${Number(c.weightKg).toFixed(2)} kg`
-                : "-";
+          header.innerHTML = `
+            <div>
+              <div class="spot-name">${spot.name || "Unnamed spot"}</div>
+              ${coordPart ? `<div class="spot-coords">${coordPart}</div>` : ""}
+            </div>
+            <div class="spot-count">${list.length} catch${list.length === 1 ? "" : "es"}</div>
+          `;
+          block.appendChild(header);
 
-            const weatherSnippet =
-              typeof c.weatherTemp === "number"
-                ? `${c.weatherTemp.toFixed(1)}°C`
+          const catchesList = document.createElement("div");
+          catchesList.className = "spot-catches";
+
+          if (!list.length) {
+            const msg = document.createElement("div");
+            msg.className = "spot-catch-sub";
+            msg.textContent = "No catches yet at this spot.";
+            catchesList.appendChild(msg);
+          } else {
+            list
+              .slice()
+              .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+              .forEach(c => {
+                const item = document.createElement("div");
+                item.className = "spot-catch";
+
+                const dateStr = c.timestamp
+                  ? new Date(c.timestamp).toLocaleDateString()
+                  : "";
+
+                const weight =
+                  c.weightKg !== undefined && c.weightKg !== null
+                    ? `${Number(c.weightKg).toFixed(2)} kg`
+                    : "-";
+
+                const weatherSnippet =
+                  typeof c.weatherTemp === "number"
+                    ? `${c.weatherTemp.toFixed(1)}°C`
+                    : "";
+
+                const lureText = c.lure ? `Lure: ${c.lure}` : "";
+
+                const subParts = [];
+                if (lureText) subParts.push(lureText);
+                if (weatherSnippet) subParts.push(`Weather: ${weatherSnippet}`);
+
+                item.innerHTML = `
+                  <div class="spot-catch-main">
+                    <span>${c.species || "Unknown species"} • ${weight}</span>
+                    <span>${dateStr}</span>
+                  </div>
+                  <div class="spot-catch-sub">
+                    ${subParts.join(" • ")}
+                  </div>
+                `;
+                catchesList.appendChild(item);
+              });
+          }
+
+          block.appendChild(catchesList);
+          spotsEl.appendChild(block);
+        });
+      } else {
+        // Fallback: no saved spots yet, group purely from catches
+        catchGroups.forEach((list, key) => {
+          const block = document.createElement("div");
+          block.className = "spot-block";
+
+          const header = document.createElement("div");
+          header.className = "spot-header";
+          header.innerHTML = `
+            <div class="spot-name">${key}</div>
+            <div class="spot-count">${list.length} catch${list.length === 1 ? "" : "es"}</div>
+          `;
+          block.appendChild(header);
+
+          const catchesList = document.createElement("div");
+          catchesList.className = "spot-catches";
+
+          list
+            .slice()
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+            .forEach(c => {
+              const item = document.createElement("div");
+              item.className = "spot-catch";
+
+              const dateStr = c.timestamp
+                ? new Date(c.timestamp).toLocaleDateString()
                 : "";
 
-            const lureText = c.lure ? `Lure: ${c.lure}` : "";
+              const weight =
+                c.weightKg !== undefined && c.weightKg !== null
+                  ? `${Number(c.weightKg).toFixed(2)} kg`
+                  : "-";
 
-            const subParts = [];
-            if (lureText) subParts.push(lureText);
-            if (weatherSnippet) subParts.push(`Weather: ${weatherSnippet}`);
+              const lureText = c.lure ? `Lure: ${c.lure}` : "";
 
-            item.innerHTML = `
-              <div class="spot-catch-main">
-                <span>${c.species || "Unknown species"} • ${weight}</span>
-                <span>${dateStr}</span>
-              </div>
-              <div class="spot-catch-sub">
-                ${subParts.join(" • ")}
-              </div>
-            `;
+              item.innerHTML = `
+                <div class="spot-catch-main">
+                  <span>${c.species || "Unknown species"} • ${weight}</span>
+                  <span>${dateStr}</span>
+                </div>
+                <div class="spot-catch-sub">
+                  ${lureText}
+                </div>
+              `;
+              catchesList.appendChild(item);
+            });
 
-            catchesList.appendChild(item);
-          });
-
-        block.appendChild(catchesList);
-        spotsEl.appendChild(block);
-      });
+          block.appendChild(catchesList);
+          spotsEl.appendChild(block);
+        });
+      }
     }
   </script>
 </body>
