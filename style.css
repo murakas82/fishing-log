@@ -1,3 +1,253 @@
+
+/* Basic reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  background: #0b1724;
+  color: #f5f5f5;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+}
+
+.app {
+  width: 100%;
+  max-width: 480px;
+  padding: 16px;
+}
+
+/* Fade-in animation */
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+header {
+  margin-bottom: 16px;
+}
+
+header h1 {
+  font-size: 1.6rem;
+  margin-bottom: 4px;
+}
+
+header p {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.card {
+  background: #111d2b;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+
+.section-title {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+label {
+  font-size: 0.9rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  border: 1px solid #2a3c52;
+  background: #081119;
+  color: #f5f5f5;
+  font-size: 0.95rem;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+button {
+  padding: 10px;
+  border-radius: 999px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #1f8bfd;
+  color: white;
+  box-shadow: 0 4px 10px rgba(31,139,253,0.4);
+}
+
+button:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(31,139,253,0.4);
+}
+
+/* Secondary / outline button */
+.secondary-btn {
+  background: transparent;
+  color: #1f8bfd;
+  border: 1px solid #1f8bfd;
+  box-shadow: none;
+}
+
+.secondary-btn:active {
+  box-shadow: none;
+}
+
+/* Auth UI */
+.auth-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.auth-message {
+  font-size: 0.8rem;
+  margin-top: 4px;
+  min-height: 1.2em;
+}
+
+/* Logged-in user bar */
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-label {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.user-email {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* Nav pills (Add catch / Your catches) */
+.nav-pill {
+  width: 100%;
+}
+
+/* Loading spinner */
+.loading-spinner-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 0;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255,255,255,0.15);
+  border-top-color: #1f8bfd;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Catch list */
+.catch-list {
+  margin-top: 8px;
+}
+
+.catch-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.95rem;
+}
+
+.catch-top {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.catch-meta {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.catch-notes {
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.empty-state {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  text-align: left;
+  padding: 8px 0;
+}
+
+/* Delete button */
+.delete-btn {
+  background: #d9534f;
+  box-shadow: 0 3px 8px rgba(217, 83, 79, 0.4);
+  font-size: 0.85rem;
+  padding: 6px 14px;
+  align-self: flex-end;
+  margin-top: 4px;
+}
+
+.delete-btn:active {
+  box-shadow: 0 1px 4px rgba(217, 83, 79, 0.4);
+}
+
+/* Stats section */
+.stats-container {
+  margin-top: 8px;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.stat-pill {
+  background: #081119;
+  border-radius: 999px;
+  padding: 6px 10px;
+  border: 1px solid #2a3c52;
+  font-size: 0.8rem;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.stat-label {
+  opacity: 0.7;
+}
+
+.stat-value {
+  font-weight: 600;
+}
+
+
 /* My fishing spots layout */
 .spots-container {
   margin-top: 8px;
@@ -47,3 +297,4 @@
   font-size: 0.8rem;
   opacity: 0.8;
 }
+
