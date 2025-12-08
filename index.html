@@ -22,9 +22,9 @@
       <div class="loading-spinner"></div>
     </div>
 
-    <!-- AUTH CARD -->
+    <!-- AUTH -->
     <div class="card" id="authCard" style="display:none;">
-      <h2 class="section-title">Log in or sign up</h2>
+      <h2>Log in or sign up</h2>
 
       <label>Email</label>
       <input id="authEmail" type="email">
@@ -40,7 +40,7 @@
       <p id="authMessage" class="auth-message"></p>
     </div>
 
-    <!-- LOGGED IN USER -->
+    <!-- USER CARD -->
     <div class="card" id="userCard" style="display:none;">
       <div class="user-row">
         <div>
@@ -54,27 +54,25 @@
     <!-- MAIN CONTENT -->
     <div id="appContent" style="display:none;">
 
-      <!------------ GLOBAL STATS ------------>
+      <!-- GLOBAL STATS -->
       <div class="card">
-        <h2 class="section-title">Stats</h2>
+        <h2>Stats</h2>
         <div id="stats" class="stats-container">
           <p class="empty-state">No stats yet – add your first catch!</p>
         </div>
       </div>
 
-      <!------------ MY FISHING SPOTS ------------>
+      <!-- FISHING SPOTS -->
       <div class="card">
         <div class="spots-header-row">
-          <h2 class="section-title">My fishing spots</h2>
+          <h2>My fishing spots</h2>
           <button id="goAddSpotBtn" class="tiny-secondary-btn">Add new spot</button>
         </div>
 
-        <div id="spotsContainer" class="spots-container">
-          <p class="empty-state">No fishing spots yet – add one!</p>
-        </div>
+        <div id="spotsContainer" class="spots-container"></div>
       </div>
 
-      <!------------ ADD CATCH BUTTON ------------>
+      <!-- ADD CATCH (GLOBAL BUTTON) -->
       <div class="card">
         <button id="goAddCatchBtn" class="tiny-secondary-btn">Add catch</button>
       </div>
@@ -108,6 +106,7 @@
       appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
     };
 
+    /* INIT */
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
@@ -140,6 +139,7 @@
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
+    /* NAVIGATION */
     document.getElementById("goAddSpotBtn").onclick = () =>
       window.location.href = "add-spot.html";
 
@@ -167,6 +167,7 @@
       }
     });
 
+    /* LOAD DATA */
     async function loadCatches() {
       const q = query(collection(db, "catches"), where("userId", "==", currentUser.uid));
       const snap = await getDocs(q);
@@ -179,7 +180,7 @@
       spots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 
-    /* GLOBAL STATS */
+    /* RENDER GLOBAL STATS */
     function renderStats() {
       const statsEl = document.getElementById("stats");
       statsEl.innerHTML = "";
@@ -191,35 +192,34 @@
 
       const total = catches.length;
       let biggest = catches[0];
-      let totalWeight = 0;
+      let sum = 0;
 
       catches.forEach(c => {
         const w = Number(c.weightKg) || 0;
-        totalWeight += w;
+        sum += w;
         if (w > Number(biggest.weightKg || 0)) biggest = c;
       });
 
-      const avg = totalWeight / total;
+      const avg = sum / total;
 
       const container = document.createElement("div");
-      container.className = "stats";
 
-      function add(label, value) {
-        const pill = document.createElement("div");
-        pill.className = "stat-pill";
-        pill.innerHTML = `<span class="stat-label">${label}</span>
-                          <span class="stat-value">${value}</span>`;
-        container.appendChild(pill);
+      function pill(label, value) {
+        const div = document.createElement("div");
+        div.className = "stat-pill";
+        div.innerHTML = `<span class="stat-label">${label}</span>
+                         <span class="stat-value">${value}</span>`;
+        container.appendChild(div);
       }
 
-      add("Total catches", total);
-      add("Biggest fish", `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`);
-      add("Average weight", `${avg.toFixed(2)} kg`);
+      pill("Total catches", total);
+      pill("Biggest fish", `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`);
+      pill("Average weight", `${avg.toFixed(2)} kg`);
 
       statsEl.appendChild(container);
     }
 
-    /* SPOTS DISPLAY */
+    /* RENDER SPOTS */
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
       spotsEl.innerHTML = "";
@@ -245,9 +245,12 @@
 
           const statsLine = total
             ? `Total catches: ${total} • Biggest: ${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`
-            : `No catches yet at this spot`;
+            : "No catches yet at this spot";
 
-          const hasCoords = typeof spot.latitude === "number" && typeof spot.longitude === "number";
+          const hasCoords =
+            typeof spot.latitude === "number" &&
+            typeof spot.longitude === "number";
+
           const mapsLink = hasCoords
             ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
             : "";
@@ -262,14 +265,25 @@
                    href="spot.html?id=${encodeURIComponent(spot.id)}">
                    ${spot.name}
                 </a>
+
                 ${
                   hasCoords
-                    ? `<a class="tiny-secondary-btn" href="${mapsLink}" target="_blank">Google Maps</a>`
+                    ? `<a class="tiny-secondary-btn" href="${mapsLink}" target="_blank">
+                         Google Maps
+                       </a>`
                     : ""
                 }
+
+                <!-- NEW ADD CATCH BUTTON -->
+                <a class="tiny-secondary-btn"
+                   href="add-catch.html?spotId=${encodeURIComponent(spot.id)}">
+                   Add catch
+                </a>
               </div>
+
               <div class="spot-count">${total} catches</div>
             </div>
+
             <div class="spot-stats">${statsLine}</div>
           `;
 
