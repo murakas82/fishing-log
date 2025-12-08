@@ -122,7 +122,7 @@
     const weatherInfoEl    = document.getElementById("weatherInfo");
     const saveCatchBtn     = document.getElementById("saveCatchBtn");
 
-    let lastWeather = null;   // { temp, windMs, label, fullText }
+    let lastWeather = null;   // { temp, windMs, label, fullText, pressure }
     let savedSpots  = [];     // spots from Firestore
 
     document.getElementById("backBtn").onclick = () => {
@@ -149,7 +149,43 @@
       return { icon: "❓", label: "Unknown weather" };
     }
 
-    // 🔥 Open-Meteo weather fetch (windspeed km/h → m/s, plus icon + text)
+    // helper: find nearest pressure value for current time
+    function findPressureForCurrentTime(data) {
+      try {
+        if (!data || !data.current_weather || !data.hourly) return null;
+        const cw = data.current_weather;
+        const hourly = data.hourly;
+        const times = hourly.time;
+        const pressures = hourly.surface_pressure;
+        if (!Array.isArray(times) || !Array.isArray(pressures)) return null;
+        if (!cw.time) return null;
+
+        let idx = times.indexOf(cw.time);
+        if (idx === -1) {
+          // pick closest time
+          let bestDiff = Infinity;
+          let bestIdx = -1;
+          const cwMs = Date.parse(cw.time);
+          for (let i = 0; i < times.length; i++) {
+            const tMs = Date.parse(times[i]);
+            const diff = Math.abs(tMs - cwMs);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestIdx = i;
+            }
+          }
+          idx = bestIdx;
+        }
+        if (idx == null || idx < 0) return null;
+        const p = pressures[idx];
+        return typeof p === "number" ? p : null;
+      } catch (e) {
+        console.error("Error matching pressure to time", e);
+        return null;
+      }
+    }
+
+    // 🔥 Open-Meteo weather fetch (windspeed km/h → m/s, plus icon + text + pressure)
     async function fetchWeather(lat, lng) {
       try {
         weatherInfoEl.textContent = "Getting weather for this spot...";
@@ -157,7 +193,9 @@
         const url =
           `https://api.open-meteo.com/v1/forecast` +
           `?latitude=${lat}&longitude=${lng}` +
-          `&current_weather=true`;
+          `&current_weather=true` +
+          `&hourly=surface_pressure` +
+          `&timezone=auto`;
 
         const res = await fetch(url);
         if (!res.ok) {
@@ -176,10 +214,14 @@
         const code = cw.weathercode;
         const { icon, label } = getWeatherIconAndLabel(code);
 
+        // current surface pressure (hPa)
+        const pressure = findPressureForCurrentTime(data);
+
         const parts = [];
         if (label)           parts.push(label);
         if (temp != null)    parts.push(`${temp.toFixed(1)} °C`);
         if (windMs != null)  parts.push(`wind ${windMs.toFixed(1)} m/s`);
+        // pressure is used for predictions, no need to display
 
         const fullText = parts.join(", ");
 
@@ -187,7 +229,8 @@
           temp,
           windMs,
           label,
-          fullText
+          fullText,
+          pressure
         };
 
         if (fullText) {
@@ -389,6 +432,7 @@
             weatherWindMs: lastWeather?.windMs ?? null,
             weatherCondition: lastWeather?.label ?? null,
             weatherDescription: lastWeather?.fullText ?? null,
+            weatherPressure: lastWeather?.pressure ?? null,   // NEW: pressure saved, not shown
             timestamp: Date.now()
           });
 
