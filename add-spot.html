@@ -4,7 +4,16 @@
   <meta charset="UTF-8" />
   <title>Add Fishing Spot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Leaflet CSS (OpenStreetMap) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
 
   <style>
     .error-message {
@@ -12,13 +21,16 @@
       margin-top: 8px;
       font-size: 0.9rem;
     }
-    .maps-helper {
-      margin-top: 12px;
+    .helper-text {
+      margin-top: 8px;
       font-size: 0.85rem;
       opacity: 0.85;
     }
-    .maps-helper p {
-      margin-bottom: 8px;
+    #map {
+      margin-top: 8px;
+      height: 260px;
+      border-radius: 16px;
+      overflow: hidden;
     }
   </style>
 </head>
@@ -34,18 +46,14 @@
       <label>Spot name</label>
       <input id="spotName" type="text" placeholder="Enter spot name" />
 
-      <div class="maps-helper">
-        <p>
-          Tip: you can pick coordinates from Google Maps.<br>
-          1) Click the button below<br>
-          2) Search your spot<br>
-          3) Right-click on the map → “What’s here?”<br>
-          4) Copy the latitude, longitude into the fields below.
-        </p>
-        <button id="openMapsBtn" class="secondary-btn">Choose location from Google Maps</button>
-      </div>
+      <p class="helper-text">
+        Tap on the map to choose the fishing spot location. Latitude and longitude
+        will be filled in automatically.
+      </p>
 
-      <label style="margin-top: 16px;">Latitude</label>
+      <div id="map"></div>
+
+      <label style="margin-top:16px;">Latitude</label>
       <input id="latitudeInput" type="number" step="0.000001" />
 
       <label>Longitude</label>
@@ -55,6 +63,13 @@
       <p id="message" class="error-message"></p>
     </div>
   </div>
+
+  <!-- Leaflet JS (OpenStreetMap) -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
 
   <script type="module">
     import { initializeApp }
@@ -88,7 +103,6 @@
     const lngEl      = document.getElementById("longitudeInput");
     const msgEl      = document.getElementById("message");
     const saveBtn    = document.getElementById("saveSpotBtn");
-    const openMapsBtn = document.getElementById("openMapsBtn");
 
     let currentUser = null;
 
@@ -100,25 +114,43 @@
       currentUser = user;
     });
 
-    /* ------- AUTO-CAPITALIZE FIRST LETTER ------- */
+    /* ------- AUTO-CAPITALIZE FIRST LETTER OF SPOT NAME ------- */
     spotNameEl.addEventListener("input", () => {
       let val = spotNameEl.value;
       if (!val) return;
       spotNameEl.value = val.charAt(0).toUpperCase() + val.slice(1);
     });
 
-    /* ------- OPEN GOOGLE MAPS HELPER ------- */
-    openMapsBtn.addEventListener("click", () => {
-      const rawName = spotNameEl.value.trim();
-      let url = "https://www.google.com/maps";
-      if (rawName) {
-        const q = encodeURIComponent(rawName);
-        url = `https://www.google.com/maps/search/${q}`;
+    /* ------- LEAFLET MAP SETUP ------- */
+
+    // Default center (roughly Estonia-ish so it's near your usual spots)
+    const initialLat = 59.0;
+    const initialLng = 25.0;
+    const map = L.map("map").setView([initialLat, initialLng], 8);
+
+    // OpenStreetMap tiles (free)
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker = null;
+
+    // When user clicks on the map, set / move marker + fill coords
+    map.on("click", (e) => {
+      const { lat, lng } = e.latlng;
+
+      if (!marker) {
+        marker = L.marker([lat, lng]).addTo(map);
+      } else {
+        marker.setLatLng([lat, lng]);
       }
-      window.open(url, "_blank");
+
+      latEl.value = lat.toFixed(6);
+      lngEl.value = lng.toFixed(6);
     });
 
-    /* ------- SAVE SPOT WITH DUPLICATE CHECK ------- */
+    /* ------- SAVE SPOT WITH DUPLICATE NAME CHECK ------- */
     saveBtn.onclick = async () => {
       msgEl.textContent = "";
 
@@ -135,7 +167,7 @@
       name = name.charAt(0).toUpperCase() + name.slice(1);
 
       if (isNaN(lat) || isNaN(lng)) {
-        msgEl.textContent = "Latitude and Longitude are required.";
+        msgEl.textContent = "Latitude and Longitude are required (pick from map).";
         return;
       }
 
