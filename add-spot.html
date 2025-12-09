@@ -12,6 +12,14 @@
       margin-top: 8px;
       font-size: 0.9rem;
     }
+    .maps-helper {
+      margin-top: 12px;
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
+    .maps-helper p {
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 
@@ -26,7 +34,18 @@
       <label>Spot name</label>
       <input id="spotName" type="text" placeholder="Enter spot name" />
 
-      <label>Latitude</label>
+      <div class="maps-helper">
+        <p>
+          Tip: you can pick coordinates from Google Maps.<br>
+          1) Click the button below<br>
+          2) Search your spot<br>
+          3) Right-click on the map → “What’s here?”<br>
+          4) Copy the latitude, longitude into the fields below.
+        </p>
+        <button id="openMapsBtn" class="secondary-btn">Choose location from Google Maps</button>
+      </div>
+
+      <label style="margin-top: 16px;">Latitude</label>
       <input id="latitudeInput" type="number" step="0.000001" />
 
       <label>Longitude</label>
@@ -69,6 +88,7 @@
     const lngEl      = document.getElementById("longitudeInput");
     const msgEl      = document.getElementById("message");
     const saveBtn    = document.getElementById("saveSpotBtn");
+    const openMapsBtn = document.getElementById("openMapsBtn");
 
     let currentUser = null;
 
@@ -87,6 +107,17 @@
       spotNameEl.value = val.charAt(0).toUpperCase() + val.slice(1);
     });
 
+    /* ------- OPEN GOOGLE MAPS HELPER ------- */
+    openMapsBtn.addEventListener("click", () => {
+      const rawName = spotNameEl.value.trim();
+      let url = "https://www.google.com/maps";
+      if (rawName) {
+        const q = encodeURIComponent(rawName);
+        url = `https://www.google.com/maps/search/${q}`;
+      }
+      window.open(url, "_blank");
+    });
+
     /* ------- SAVE SPOT WITH DUPLICATE CHECK ------- */
     saveBtn.onclick = async () => {
       msgEl.textContent = "";
@@ -100,7 +131,7 @@
         return;
       }
 
-      // Capitalize first letter (safety)
+      // Capitalize first letter again (safety)
       name = name.charAt(0).toUpperCase() + name.slice(1);
 
       if (isNaN(lat) || isNaN(lng)) {
@@ -109,21 +140,22 @@
       }
 
       try {
-        // Check duplicates (case-insensitive)
+        // Check duplicates (case-insensitive) for this user
         const q = query(
           collection(db, "spots"),
           where("userId", "==", currentUser.uid)
         );
-
         const snap = await getDocs(q);
-        const existing = snap.docs.map(d => d.data().name.toLowerCase());
+        const existingNames = snap.docs.map(d => {
+          const data = d.data();
+          return (data.name || "").toLowerCase();
+        });
 
-        if (existing.includes(name.toLowerCase())) {
+        if (existingNames.includes(name.toLowerCase())) {
           msgEl.textContent = "Spot name already exists. Choose another.";
           return;
         }
 
-        // Save new spot
         await addDoc(collection(db, "spots"), {
           userId: currentUser.uid,
           name: name,
@@ -132,7 +164,6 @@
         });
 
         window.location.href = "index.html";
-
       } catch (err) {
         console.error(err);
         msgEl.textContent = "Error saving spot.";
