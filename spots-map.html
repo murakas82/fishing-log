@@ -127,10 +127,8 @@
 
     let currentUser = null;
 
-    // Weekday shorts
     const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    /* ---------- WEATHER ICON & LABEL (shared with other pages) ---------- */
     function getWeatherIconAndLabel(code) {
       if (code === 0) return { icon: "☀️", label: "Clear sky" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
@@ -155,9 +153,8 @@
       return `${weekday} ${d}.${m}.${y}`;
     }
 
-    /* ---------- CORE PREDICTION LOGIC (COPY SAME TO predictions.html) ---------- */
+    /* ---------- CORE PREDICTION LOGIC (shared with predictions.html) ---------- */
 
-    // Compute a prediction score (0–100) for one forecast (temp, wind, pressure, moon)
     function computePredictionScoreForDay(spotCatches, forecastTemp, forecastWindMs, forecastPress, forecastMoonPhase) {
       const usable = spotCatches.filter(c =>
         typeof c.weatherTemp     === "number" &&
@@ -201,24 +198,22 @@
       return scores.reduce((a, b) => a + b, 0) / scores.length;
     }
 
-    // Fetch weather + predictions for next 3 days for a spot
     async function computeSpotWeatherAndPredictions(lat, lng, spotCatches) {
       let weatherText = "Weather: failed to load";
-
-      const predictions = []; // [{score, dateLabel}, ...]
+      const predictions = [];
 
       try {
         const url =
           `https://api.open-meteo.com/v1/forecast` +
           `?latitude=${lat}&longitude=${lng}` +
           `&current_weather=true` +
-          `&hourly=temperature_2m,windspeed_10m,surface_pressure` +
+          `&hourly=temperature_2m,windspeed_10m,pressure_msl` +   /* FIXED HERE */
           `&daily=moon_phase` +
           `&forecast_days=4` +
           `&timezone=auto`;
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error("Open-Meteo error");
+        if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
         const data = await res.json();
 
         // Live weather
@@ -238,12 +233,11 @@
           ? `Weather now: ${icon} ${wParts.join(", ")}`
           : "Weather: not available";
 
-        // Forecast arrays
         const hourly = data.hourly || {};
         const times  = hourly.time || [];
         const temps  = hourly.temperature_2m || [];
         const windsK = hourly.windspeed_10m || [];
-        const presses= hourly.surface_pressure || [];
+        const presses= hourly.pressure_msl || [];                 /* FIXED HERE */
 
         const daily = data.daily || {};
         const dTimes = daily.time || [];
@@ -253,7 +247,6 @@
           return { weatherText, predictions };
         }
 
-        // Helper to get forecast+moon for a given day offset
         function getForecastForDayOffset(dayOffset) {
           const base = new Date();
           base.setDate(base.getDate() + dayOffset);
@@ -278,7 +271,6 @@
           return { dateObj: base, temp: fTemp, windMs: fWindMs, press: fPress, moon: fMoon };
         }
 
-        // Next 3 days: offsets 1, 2, 3
         for (let offset = 1; offset <= 3; offset++) {
           const fc = getForecastForDayOffset(offset);
           if (!fc) {
@@ -305,12 +297,13 @@
 
       } catch (err) {
         console.error("Weather/prediction error:", err);
+        weatherText = "Weather error: " + (err.message || String(err));
       }
 
       return { weatherText, predictions };
     }
 
-    /* ---------- AUTH + MAP INITIALISATION ---------- */
+    /* ---------- AUTH + MAP ---------- */
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -363,17 +356,15 @@
         const mapsLink =
           `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`;
 
-        // Marker color based on tomorrow’s score
-        let markerColor = "#60a5fa"; // neutral blue default
+        let markerColor = "#60a5fa";
         const tomorrowPred = predictions[0];
         if (tomorrowPred && typeof tomorrowPred.score === "number") {
           const s = tomorrowPred.score;
-          if (s >= 70) markerColor = "#22c55e";     // green
-          else if (s >= 40) markerColor = "#eab308"; // yellow
-          else markerColor = "#ef4444";             // red
+          if (s >= 70) markerColor = "#22c55e";
+          else if (s >= 40) markerColor = "#eab308";
+          else markerColor = "#ef4444";
         }
 
-        // Build prediction text lines
         let predHtml = "Prediction (next 3 days):<br/><div class='popup-pred-lines'>";
         predictions.forEach(p => {
           const val = (p && typeof p.score === "number")
@@ -424,7 +415,6 @@
       }
     }
 
-    /* ---------- LOAD DATA HELPERS ---------- */
     async function loadSpots() {
       const q = query(
         collection(db, "spots"),
