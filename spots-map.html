@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Fishing Spots – Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    #map {
+      margin-top: 10px;
+      height: 420px;
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .map-legend {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      opacity: 0.85;
+    }
+
+    .popup-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .popup-stats {
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+    }
+
+    .popup-weather-text,
+    .popup-pred-text {
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+    }
+
+    .popup-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .popup-links a {
+      text-decoration: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app fade-in">
+    <header>
+      <h1>My fishing spots – map</h1>
+      <p>See all your spots on an interactive map with live weather & predictions.</p>
+    </header>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <h2 style="margin:0;">Spots overview</h2>
+        <button class="secondary-btn" onclick="window.location.href='index.html'">
+          ← Back to main
+        </button>
+      </div>
+
+      <div id="map"></div>
+
+      <div class="map-legend">
+        • Marker color shows tomorrow’s prediction: 🟢 good, 🟡 medium, 🔴 poor.<br/>
+        • Tap a marker to see live weather, prediction score and quick links.
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <!-- Firebase + map logic -->
+  <script type="module">
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+
+    import {
+      getAuth,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
+    import {
+      getFirestore,
+      collection, getDocs,
+      query, where
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+    /* FIREBASE CONFIG (same as index.html) */
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    let currentUser = null;
+
+    // Wait for auth
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        // If not logged in, send back to main page
+        window.location.href = "index.html";
+        return;
+      }
+
+      currentUser = user;
+      await initMapPage();
+    });
+
+    /* ---------- WEATHER ICON & LABEL ---------- */
+    function getWeatherIconAndLabel(code) {
+      if (code === 0) return { icon: "☀️", label: "Clear sky" };
+      if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
+      if (code === 2) return { icon: "⛅", label: "Partly cloudy" };
+      if (code === 3) return { icon: "☁️", label: "Overcast" };
+      if (code === 45 || code === 48) return { icon: "🌫️", label: "Fog" };
+      if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Drizzle" };
+      if (code >= 61 && code <= 67) return { icon: "🌧️", label: "Rain" };
+      if (code >= 71 && code <= 77) return { icon: "🌨️", label: "Snow" };
+      if (code >= 80 && code <= 82) return { icon: "🌦️", label: "Rain showers" };
+      if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Snow showers" };
+      if (code === 95) return { icon: "⛈️", label: "Thunderstorm" };
+      if (code === 96 || code === 99) return { icon: "⛈️", label: "Thunderstorm with hail" };
+      return { icon: "❓", label: "Unknown" };
+    }
+
+    /* ---------- MAIN MAP PAGE ---------- */
+    async function initMapPage() {
+      const [spots, catches] = await Promise.all([
+        loadSpots(),
+        loadCatches()
+      ]);
+
+      // Init map
+      const map = L.map("map").setView([59.0, 25.0], 6);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
+
+      const bounds = [];
+
+      for (const spot of spots) {
+        if (typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
+          continue; // skip spots without coords
+        }
+
+        const spotCatches = catches.filter(c => c.spotId === spot.id);
+
+        // Catches stats text
+        let statsLine = "No catches yet";
+        if (spotCatches.length) {
+          let biggest = spotCatches[0];
+          spotCatches.forEach(c => {
+            if (Number(c.weightKg) > Number(biggest.weightKg)) {
+              biggest = c;
+            }
+          });
+          statsLine =
+            `Total catches: ${spotCatches.length}, ` +
+            `biggest: ${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`;
+        }
+
+        // Fetch live weather + prediction for this spot
+        const { weatherText, predictionScore, markerColor } =
+          await fetchWeatherAndPrediction(spot, spotCatches);
+
+        const mapsLink =
+          `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`;
+
+        const scoreText = predictionScore != null
+          ? `Prediction (tomorrow): ${predictionScore.toFixed(0)}%`
+          : `Prediction: not enough data yet`;
+
+        const popupHtml = `
+          <div class="popup-title">${spot.name}</div>
+          <div class="popup-stats">${statsLine}</div>
+          <div class="popup-weather-text">${weatherText}</div>
+          <div class="popup-pred-text">${scoreText}</div>
+          <div class="popup-links">
+            <a class="tiny-secondary-btn"
+               href="spot.html?id=${encodeURIComponent(spot.id)}">
+              Open spot
+            </a>
+            <a class="tiny-secondary-btn"
+               href="add-catch.html?spotId=${encodeURIComponent(spot.id)}">
+              Add catch
+            </a>
+            <a class="tiny-secondary-btn"
+               href="${mapsLink}" target="_blank">
+              Google Maps
+            </a>
+          </div>
+        `;
+
+        // Marker color: green / yellow / red based on prediction
+        let color = markerColor;
+        const marker = L.circleMarker(
+          [spot.latitude, spot.longitude],
+          {
+            radius: 8,
+            color,
+            fillColor: color,
+            fillOpacity: 0.9,
+            weight: 2
+          }
+        ).addTo(map);
+
+        marker.bindPopup(popupHtml);
+        bounds.push([spot.latitude, spot.longitude]);
+      }
+
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [30, 30] });
+      }
+    }
+
+    /* ---------- LOAD DATA ---------- */
+    async function loadSpots() {
+      const q = query(
+        collection(db, "spots"),
+        where("userId", "==", currentUser.uid)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    async function loadCatches() {
+      const q = query(
+        collection(db, "catches"),
+        where("userId", "==", currentUser.uid)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    /* ---------- WEATHER + PREDICTION FOR ONE SPOT ---------- */
+    async function fetchWeatherAndPrediction(spot, spotCatches) {
+      // Default values
+      let weatherText = "Weather: failed to load";
+      let predictionScore = null;
+      let markerColor = "#60a5fa"; // blue as neutral fallback
+
+      try {
+        const lat = spot.latitude;
+        const lng = spot.longitude;
+
+        const url =
+          `https://api.open-meteo.com/v1/forecast` +
+          `?latitude=${lat}&longitude=${lng}` +
+          `&current_weather=true` +
+          `&hourly=temperature_2m,windspeed_10m,surface_pressure` +
+          `&timezone=auto`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Open-Meteo error");
+        const data = await res.json();
+
+        /* ----- Live weather text ----- */
+        const cw = data.current_weather || {};
+        const temp    = typeof cw.temperature === "number" ? cw.temperature : null;
+        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
+        const windMs  = windKmh != null ? windKmh / 3.6 : null;
+        const code    = cw.weathercode;
+
+        const { icon, label } = getWeatherIconAndLabel(code);
+
+        const weatherParts = [];
+        if (label)          weatherParts.push(label);
+        if (temp != null)   weatherParts.push(`${temp.toFixed(1)} °C`);
+        if (windMs != null) weatherParts.push(`wind ${windMs.toFixed(1)} m/s`);
+
+        weatherText = weatherParts.length
+          ? `Weather now: ${icon} ${weatherParts.join(", ")}`
+          : "Weather: not available";
+
+        /* ----- Forecast for tomorrow (for prediction) ----- */
+        const hourly = data.hourly || {};
+        const times  = hourly.time || [];
+        const temps  = hourly.temperature_2m || [];
+        const winds  = hourly.windspeed_10m || [];
+        const presses= hourly.surface_pressure || [];
+
+        if (!times.length || !temps.length || !winds.length || !presses.length) {
+          return { weatherText, predictionScore, markerColor };
+        }
+
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+
+        const yyyy = tomorrow.getFullYear();
+        const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
+        const dd = String(tomorrow.getDate()).padStart(2, "0");
+        const tomorrowStr = `${yyyy}-${mm}-${dd}`;
+
+        // Prefer 12:00 for tomorrow, else first hour of that day
+        let idx = times.findIndex(t => t.startsWith(`${tomorrowStr}T12`));
+        if (idx === -1) {
+          idx = times.findIndex(t => t.startsWith(tomorrowStr));
+        }
+        if (idx === -1) {
+          return { weatherText, predictionScore, markerColor };
+        }
+
+        const forecastTemp   = temps[idx];
+        const forecastWindKmh= winds[idx];
+        const forecastWindMs = forecastWindKmh / 3.6;
+        const forecastPress  = presses[idx];
+
+        /* ----- Prediction score based on historical catches ----- */
+        const usable = spotCatches.filter(c =>
+          typeof c.weatherTemp     === "number" &&
+          typeof c.weatherWindMs   === "number" &&
+          typeof c.weatherPressure === "number"
+        );
+
+        if (!usable.length) {
+          predictionScore = null;
+          markerColor = "#60a5fa"; // neutral
+          return { weatherText, predictionScore, markerColor };
+        }
+
+        const scores = usable.map(c => {
+          let score = 100;
+          let penalty = 0;
+
+          // Temperature: tolerance ±5 °C
+          const tDiff = Math.abs(c.weatherTemp - forecastTemp);
+          if (tDiff > 5) {
+            penalty += (tDiff - 5) * 2;
+          }
+
+          // Wind: tolerance ±4 m/s
+          const wDiff = Math.abs(c.weatherWindMs - forecastWindMs);
+          if (wDiff > 4) {
+            penalty += (wDiff - 4) * 3;
+          }
+
+          // Pressure regimes: <1000 vs >=1000
+          if (forecastPress < 1000) {
+            if (c.weatherPressure >= 1000) penalty += 10;
+          } else {
+            if (c.weatherPressure < 1000)  penalty += 10;
+          }
+
+          score = Math.max(0, Math.min(100, 100 - penalty));
+          return score;
+        });
+
+        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+        predictionScore = avgScore;
+
+        // Marker color based on score
+        if (predictionScore >= 70) {
+          markerColor = "#22c55e"; // green
+        } else if (predictionScore >= 40) {
+          markerColor = "#eab308"; // yellow
+        } else {
+          markerColor = "#ef4444"; // red
+        }
+
+        return { weatherText, predictionScore, markerColor };
+
+      } catch (err) {
+        console.error("Weather/prediction error for spot", spot?.name, err);
+        return { weatherText, predictionScore, markerColor };
+      }
+    }
+  </script>
+</body>
+</html>
