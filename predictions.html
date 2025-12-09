@@ -116,7 +116,6 @@
       query, where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /* FIREBASE CONFIG (same as index.html) */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -177,7 +176,6 @@
       return { icon: "❓", label: "Unknown" };
     }
 
-    // SAME PREDICTION LOGIC AS IN spots-map.html
     function computePredictionScoreForDay(spotCatches, forecastTemp, forecastWindMs, forecastPress, forecastMoonPhase) {
       const usable = spotCatches.filter(c =>
         typeof c.weatherTemp     === "number" &&
@@ -191,14 +189,10 @@
         let penalty = 0;
 
         const tempDiff = Math.abs(c.weatherTemp - forecastTemp);
-        if (tempDiff > 5) {
-          penalty += (tempDiff - 5) * 2;
-        }
+        if (tempDiff > 5) penalty += (tempDiff - 5) * 2;
 
         const windDiff = Math.abs(c.weatherWindMs - forecastWindMs);
-        if (windDiff > 4) {
-          penalty += (windDiff - 4) * 3;
-        }
+        if (windDiff > 4) penalty += (windDiff - 4) * 3;
 
         if (forecastPress < 1000) {
           if (c.weatherPressure >= 1000) penalty += 10;
@@ -229,13 +223,13 @@
         `https://api.open-meteo.com/v1/forecast` +
         `?latitude=${lat}&longitude=${lng}` +
         `&current_weather=true` +
-        `&hourly=temperature_2m,windspeed_10m,surface_pressure` +
+        `&hourly=temperature_2m,windspeed_10m,pressure_msl` +   /* FIXED HERE */
         `&daily=moon_phase` +
         `&forecast_days=4` +
         `&timezone=auto`;
 
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Open-Meteo error");
+      if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
       const data = await res.json();
 
       const cw = data.current_weather || {};
@@ -258,7 +252,7 @@
       const times  = hourly.time || [];
       const temps  = hourly.temperature_2m || [];
       const windsK = hourly.windspeed_10m || [];
-      const presses= hourly.surface_pressure || [];
+      const presses= hourly.pressure_msl || [];                 /* FIXED HERE */
 
       const daily = data.daily || {};
       const dTimes = daily.time || [];
@@ -277,9 +271,7 @@
         const dateStr = `${yyyy}-${mm}-${dd}`;
 
         let idx = times.findIndex(t => t.startsWith(`${dateStr}T12`));
-        if (idx === -1) {
-          idx = times.findIndex(t => t.startsWith(dateStr));
-        }
+        if (idx === -1) idx = times.findIndex(t => t.startsWith(dateStr));
         if (idx === -1) return null;
 
         const fTemp  = temps[idx];
@@ -425,7 +417,6 @@
         if (typeof p.score === "number") {
           scoreSpan.textContent = `${p.score.toFixed(0)}%`;
 
-          // category tag
           if (p.score >= 70) {
             tag.textContent = "Good";
             tag.classList.add("pred-tag-good");
