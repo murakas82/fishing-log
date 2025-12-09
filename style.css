@@ -329,3 +329,29 @@ button:active {
     align-items: flex-start;
   }
 }
+
+/* Make <select> and <textarea> match the other inputs */
+select,
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  margin-top: 4px;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background-color: #020617;  /* same dark background */
+  color: #e5e7eb;             /* same light text */
+  font-size: 0.95rem;
+  outline: none;
+}
+
+select:focus,
+textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+}
+
+/* Optional: nicer textarea behaviour */
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
