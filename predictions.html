@@ -227,6 +227,33 @@
       return names[idx] ?? dateStr;
     }
 
+    /* 🌙 Simple moon phase calculator (0..1)
+       0   = new moon
+       0.5 = full moon
+       Based on days since known new moon (Jan 6, 2000 18:14 UTC) and synodic month ~29.530588 days.
+    */
+    function moonPhaseIndex(date) {
+      const synodicMonth = 29.530588853;
+      const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14); // 2000-01-06 18:14 UTC
+
+      const time = date.getTime();
+      const daysSince = (time - knownNewMoon) / (1000 * 60 * 60 * 24);
+      let phase = daysSince / synodicMonth;
+      phase = phase - Math.floor(phase); // wrap 0..1
+      return phase; // 0..1
+    }
+
+    function moonPhaseLabel(phase) {
+      if (phase < 0.03 || phase > 0.97) return "New";
+      if (phase < 0.22) return "Waxing crescent";
+      if (phase < 0.28) return "First quarter";
+      if (phase < 0.47) return "Waxing gibbous";
+      if (phase < 0.53) return "Full";
+      if (phase < 0.72) return "Waning gibbous";
+      if (phase < 0.78) return "Last quarter";
+      return "Waning crescent";
+    }
+
     /* FETCH FORECAST FOR THIS SPOT (daily + hourly) */
     async function getForecastForSpot() {
       if (!spot || typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
@@ -333,7 +360,7 @@
       };
     }
 
-    /* RENDER PREDICTIONS FOR THIS SPOT (with detailed debug) */
+    /* RENDER PREDICTIONS FOR THIS SPOT (with detailed debug + moon phase) */
     async function renderPredictions() {
       predictionsContainer.innerHTML = "";
       if (debugContainer) {
@@ -387,11 +414,15 @@
         let matches = 0;
         const debugLinesForDay = [];
 
+        const forecastMoonPhase = moonPhaseIndex(dObj);
+        const forecastMoonLabel = moonPhaseLabel(forecastMoonPhase);
+
         debugLinesForDay.push(
           `=== ${day.date} ===` +
           (typeof day.pressureMean === "number"
             ? `  forecastPressure=${day.pressureMean.toFixed(1)} hPa (${day.pressureMean >= 1000 ? "high" : "low"})`
-            : "  forecastPressure=n/a")
+            : "  forecastPressure=n/a") +
+          `  forecastMoon=${forecastMoonLabel} (phase=${forecastMoonPhase.toFixed(2)})`
         );
 
         for (const c of catchesWithWeather) {
@@ -402,6 +433,12 @@
           const catchDate = new Date(c.timestamp || 0);
           const catchHour = catchDate.getHours();
           const catchTimeLabel = catchDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+          // Moon phase for catch date
+          const catchMoonPhase = moonPhaseIndex(new Date(
+            catchDate.getFullYear(), catchDate.getMonth(), catchDate.getDate()
+          ));
+          const catchMoonLabel = moonPhaseLabel(catchMoonPhase);
 
           const hourlyPoint = getHourlyForDateAndCatchHour(forecast, day.date, catchHour);
 
@@ -418,11 +455,10 @@
           const tDiff = Math.abs(tForecast - tCatch);
           const wDiff = Math.abs(wForecast - wCatch);
 
-          // Temp / wind thresholds
-          if (tDiff > 4 || wDiff > 3) {
+          // NEW tolerance: ±5°C and ±4 m/s
+          if (tDiff > 5 || wDiff > 4) {
             debugLinesForDay.push(
-              `- Catch @ ${catchTimeLabel}: filtered out` +
-              ` (tDiff=${tDiff.toFixed(1)}°C, wDiff=${wDiff.toFixed(1)} m/s).`
+              `- Catch @ ${catchTimeLabel}: filtered out (tDiff=${tDiff.toFixed(1)}°C > 5, wDiff=${wDiff.toFixed(1)} m/s > 4).`
             );
             continue;
           }
@@ -452,9 +488,30 @@
             }
           }
 
-          const tempPenalty = tDiff / 4;    // 0..1
-          const windPenalty = wDiff / 3;    // 0..1
-          const totalPenalty = tempPenalty + windPenalty + pressPenalty;
+          // 🌙 Moon phase match
+          // phase difference on circle (0..0.5)
+          let moonDiff = Math.abs(forecastMoonPhase - catchMoonPhase);
+          if (moonDiff > 0.5) moonDiff = 1 - moonDiff;
+
+          let moonPenalty = 0;
+          let moonNote = `moon: forecast=${forecastMoonLabel} (${forecastMoonPhase.toFixed(2)}),` +
+                         ` catch=${catchMoonLabel} (${catchMoonPhase.toFixed(2)}), Δ=${moonDiff.toFixed(2)}`;
+          // If moon phase difference > 0.25 (quarter cycle), ignore catch
+          if (moonDiff > 0.25) {
+            debugLinesForDay.push(
+              `- Catch @ ${catchTimeLabel}: filtered out by moon phase (${moonNote}, > 0.25).`
+            );
+            continue;
+          } else {
+            // penalty scaled 0..1 over 0..0.25
+            moonPenalty = moonDiff / 0.25;
+            moonNote += `, moonPenalty=${moonPenalty.toFixed(2)}`;
+          }
+
+          // penalties
+          const tempPenalty = tDiff / 5;    // 0..1
+          const windPenalty = wDiff / 4;    // 0..1
+          const totalPenalty = tempPenalty + windPenalty + pressPenalty + moonPenalty;
 
           let contributes = false;
           let closeness = 0;
@@ -474,8 +531,9 @@
             `- Catch @ ${catchTimeLabel}:` +
             ` catchTemp=${tCatch.toFixed(1)}°C, forecastTemp=${tForecast.toFixed(1)}°C (Δ=${tDiff.toFixed(1)}),` +
             ` catchWind=${wCatch.toFixed(1)} m/s, forecastWind=${wForecast.toFixed(1)} m/s (Δ=${wDiff.toFixed(1)}),` +
-            ` ${pressureNote},` +
-            ` penalties: temp=${tempPenalty.toFixed(2)}, wind=${windPenalty.toFixed(2)}, pressure=${pressPenalty.toFixed(2)},` +
+            ` ${pressureNote}, ${moonNote},` +
+            ` penalties: temp=${tempPenalty.toFixed(2)}, wind=${windPenalty.toFixed(2)},` +
+            ` pressure=${pressPenalty.toFixed(2)}, moon=${moonPenalty.toFixed(2)},` +
             ` total=${totalPenalty.toFixed(2)}, contributes=${contributes ? "YES" : "NO"}`
           );
         }
@@ -551,7 +609,7 @@
             Forecast: ${icon} ${weatherText}
           </div>
           <div class="prediction-score">
-            Based on ${p.matches} similar catch${p.matches === 1 ? "" : "es"}.
+            Based on ${p.matches} similar catch${p.matches === 1 ? "" : "es"} (including moon phase).
           </div>
         `;
 
