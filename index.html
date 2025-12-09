@@ -411,15 +411,18 @@
             const tDiff = Math.abs(day.temp - tCatch);
             const wDiff = Math.abs(day.windMs - wCatch);
 
-            // Pressure difference if both exist
-            let pDiff = null;
-            if (pCatch != null && day.pressure != null) {
-              pDiff = Math.abs(day.pressure - pCatch);
-            }
-
-            // basic similarity thresholds
+            // basic similarity thresholds on temp & wind
             if (tDiff > 4 || wDiff > 3) continue;
-            if (pDiff != null && pDiff > 8) continue; // 8 hPa difference = too different
+
+            // Pressure penalty: same side of 1000 hPa = no penalty, different side = full penalty
+            let pressPenalty = 0;
+            if (pCatch != null && day.pressure != null) {
+              const forecastHigh = day.pressure >= 1000;
+              const catchHigh = pCatch >= 1000;
+              if (forecastHigh !== catchHigh) {
+                pressPenalty = 1; // maximum pressure penalty
+              }
+            }
 
             matches++;
 
@@ -427,7 +430,6 @@
             const weightBonus = Math.max(0, Number(c.weightKg) || 0);
             const tempPenalty = tDiff / 4;    // up to 1
             const windPenalty = wDiff / 3;    // up to 1
-            const pressPenalty = pDiff != null ? (pDiff / 20) : 0; // 20 hPa diff ~ 1
 
             let closeness = 1 - tempPenalty - windPenalty - pressPenalty;
             if (closeness < 0) closeness = 0;
@@ -435,10 +437,7 @@
             score += (base + weightBonus) * closeness;
           }
 
-          // NOTE: we NO LONGER skip days with matches === 0
-          // If no historical matches, score stays 0 and matches = 0,
-          // but we still create a prediction entry for that date.
-
+          // We allow score = 0 / matches = 0; still pick a "best" spot per day
           const existing = predictionsByDate.get(day.date);
           if (!existing || score > existing.score) {
             predictionsByDate.set(day.date, {
