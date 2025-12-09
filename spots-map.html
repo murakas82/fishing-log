@@ -55,6 +55,10 @@
     .popup-links a {
       text-decoration: none;
     }
+
+    .popup-pred-lines {
+      margin-top: 2px;
+    }
   </style>
 </head>
 
@@ -76,8 +80,10 @@
       <div id="map"></div>
 
       <div class="map-legend">
-        • Marker color shows tomorrow’s prediction: 🟢 good, 🟡 medium, 🔴 poor.<br/>
-        • Tap a marker to see live weather, prediction score and quick links.
+        • Marker color (tomorrow): <span style="color:#22c55e;">●</span> good (≥70%), 
+        <span style="color:#eab308;">●</span> medium (40–69%), 
+        <span style="color:#ef4444;">●</span> poor (&lt;40%).<br/>
+        • Popup shows live weather now and prediction for the next 3 days.
       </div>
     </div>
   </div>
@@ -121,19 +127,10 @@
 
     let currentUser = null;
 
-    // Wait for auth
-    onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        // If not logged in, send back to main page
-        window.location.href = "index.html";
-        return;
-      }
+    // Weekday shorts
+    const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-      currentUser = user;
-      await initMapPage();
-    });
-
-    /* ---------- WEATHER ICON & LABEL ---------- */
+    /* ---------- WEATHER ICON & LABEL (shared with other pages) ---------- */
     function getWeatherIconAndLabel(code) {
       if (code === 0) return { icon: "☀️", label: "Clear sky" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
@@ -150,14 +147,187 @@
       return { icon: "❓", label: "Unknown" };
     }
 
-    /* ---------- MAIN MAP PAGE ---------- */
+    function formatDateLabel(dateObj) {
+      const d = dateObj.getDate();
+      const m = dateObj.getMonth() + 1;
+      const y = dateObj.getFullYear();
+      const weekday = WEEKDAYS[dateObj.getDay()];
+      return `${weekday} ${d}.${m}.${y}`;
+    }
+
+    /* ---------- CORE PREDICTION LOGIC (COPY SAME TO predictions.html) ---------- */
+
+    // Compute a prediction score (0–100) for one forecast (temp, wind, pressure, moon)
+    function computePredictionScoreForDay(spotCatches, forecastTemp, forecastWindMs, forecastPress, forecastMoonPhase) {
+      const usable = spotCatches.filter(c =>
+        typeof c.weatherTemp     === "number" &&
+        typeof c.weatherWindMs   === "number" &&
+        typeof c.weatherPressure === "number"
+      );
+
+      if (!usable.length) return null;
+
+      const scores = usable.map(c => {
+        let penalty = 0;
+
+        const tempDiff = Math.abs(c.weatherTemp - forecastTemp);
+        if (tempDiff > 5) {
+          penalty += (tempDiff - 5) * 2;
+        }
+
+        const windDiff = Math.abs(c.weatherWindMs - forecastWindMs);
+        if (windDiff > 4) {
+          penalty += (windDiff - 4) * 3;
+        }
+
+        if (forecastPress < 1000) {
+          if (c.weatherPressure >= 1000) penalty += 10;
+        } else {
+          if (c.weatherPressure < 1000)  penalty += 10;
+        }
+
+        const catchMoon = typeof c.moonPhase === "number" ? c.moonPhase : null;
+        if (catchMoon != null && typeof forecastMoonPhase === "number") {
+          const moonDiff = Math.abs(catchMoon - forecastMoonPhase);
+          penalty += moonDiff * 40;
+        }
+
+        let score = 100 - penalty;
+        if (score < 0) score = 0;
+        if (score > 100) score = 100;
+        return score;
+      });
+
+      return scores.reduce((a, b) => a + b, 0) / scores.length;
+    }
+
+    // Fetch weather + predictions for next 3 days for a spot
+    async function computeSpotWeatherAndPredictions(lat, lng, spotCatches) {
+      let weatherText = "Weather: failed to load";
+
+      const predictions = []; // [{score, dateLabel}, ...]
+
+      try {
+        const url =
+          `https://api.open-meteo.com/v1/forecast` +
+          `?latitude=${lat}&longitude=${lng}` +
+          `&current_weather=true` +
+          `&hourly=temperature_2m,windspeed_10m,surface_pressure` +
+          `&daily=moon_phase` +
+          `&forecast_days=4` +
+          `&timezone=auto`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Open-Meteo error");
+        const data = await res.json();
+
+        // Live weather
+        const cw = data.current_weather || {};
+        const tempNow    = typeof cw.temperature === "number" ? cw.temperature : null;
+        const windKmhNow = typeof cw.windspeed === "number" ? cw.windspeed : null;
+        const windMsNow  = windKmhNow != null ? windKmhNow / 3.6 : null;
+        const codeNow    = cw.weathercode;
+
+        const { icon, label } = getWeatherIconAndLabel(codeNow);
+        const wParts = [];
+        if (label)          wParts.push(label);
+        if (tempNow != null)wParts.push(`${tempNow.toFixed(1)} °C`);
+        if (windMsNow != null) wParts.push(`wind ${windMsNow.toFixed(1)} m/s`);
+
+        weatherText = wParts.length
+          ? `Weather now: ${icon} ${wParts.join(", ")}`
+          : "Weather: not available";
+
+        // Forecast arrays
+        const hourly = data.hourly || {};
+        const times  = hourly.time || [];
+        const temps  = hourly.temperature_2m || [];
+        const windsK = hourly.windspeed_10m || [];
+        const presses= hourly.surface_pressure || [];
+
+        const daily = data.daily || {};
+        const dTimes = daily.time || [];
+        const dMoon  = daily.moon_phase || [];
+
+        if (!times.length || !temps.length || !windsK.length || !presses.length || !dTimes.length || !dMoon.length) {
+          return { weatherText, predictions };
+        }
+
+        // Helper to get forecast+moon for a given day offset
+        function getForecastForDayOffset(dayOffset) {
+          const base = new Date();
+          base.setDate(base.getDate() + dayOffset);
+          const yyyy = base.getFullYear();
+          const mm = String(base.getMonth() + 1).padStart(2, "0");
+          const dd = String(base.getDate()).padStart(2, "0");
+          const dateStr = `${yyyy}-${mm}-${dd}`;
+
+          let idx = times.findIndex(t => t.startsWith(`${dateStr}T12`));
+          if (idx === -1) {
+            idx = times.findIndex(t => t.startsWith(dateStr));
+          }
+          if (idx === -1) return null;
+
+          const fTemp = temps[idx];
+          const fWindMs = windsK[idx] / 3.6;
+          const fPress = presses[idx];
+
+          const dIdx = dTimes.findIndex(t => t === dateStr);
+          const fMoon = dIdx >= 0 ? dMoon[dIdx] : null;
+
+          return { dateObj: base, temp: fTemp, windMs: fWindMs, press: fPress, moon: fMoon };
+        }
+
+        // Next 3 days: offsets 1, 2, 3
+        for (let offset = 1; offset <= 3; offset++) {
+          const fc = getForecastForDayOffset(offset);
+          if (!fc) {
+            predictions.push({
+              score: null,
+              dateLabel: formatDateLabel(new Date(new Date().setDate(new Date().getDate() + offset)))
+            });
+            continue;
+          }
+
+          const score = computePredictionScoreForDay(
+            spotCatches,
+            fc.temp,
+            fc.windMs,
+            fc.press,
+            fc.moon
+          );
+
+          predictions.push({
+            score,
+            dateLabel: formatDateLabel(fc.dateObj)
+          });
+        }
+
+      } catch (err) {
+        console.error("Weather/prediction error:", err);
+      }
+
+      return { weatherText, predictions };
+    }
+
+    /* ---------- AUTH + MAP INITIALISATION ---------- */
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+
+      currentUser = user;
+      await initMapPage();
+    });
+
     async function initMapPage() {
       const [spots, catches] = await Promise.all([
         loadSpots(),
         loadCatches()
       ]);
 
-      // Init map
       const map = L.map("map").setView([59.0, 25.0], 6);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -169,12 +339,11 @@
 
       for (const spot of spots) {
         if (typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
-          continue; // skip spots without coords
+          continue;
         }
 
         const spotCatches = catches.filter(c => c.spotId === spot.id);
 
-        // Catches stats text
         let statsLine = "No catches yet";
         if (spotCatches.length) {
           let biggest = spotCatches[0];
@@ -188,22 +357,37 @@
             `biggest: ${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`;
         }
 
-        // Fetch live weather + prediction for this spot
-        const { weatherText, predictionScore, markerColor } =
-          await fetchWeatherAndPrediction(spot, spotCatches);
+        const { weatherText, predictions } =
+          await computeSpotWeatherAndPredictions(spot.latitude, spot.longitude, spotCatches);
 
         const mapsLink =
           `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`;
 
-        const scoreText = predictionScore != null
-          ? `Prediction (tomorrow): ${predictionScore.toFixed(0)}%`
-          : `Prediction: not enough data yet`;
+        // Marker color based on tomorrow’s score
+        let markerColor = "#60a5fa"; // neutral blue default
+        const tomorrowPred = predictions[0];
+        if (tomorrowPred && typeof tomorrowPred.score === "number") {
+          const s = tomorrowPred.score;
+          if (s >= 70) markerColor = "#22c55e";     // green
+          else if (s >= 40) markerColor = "#eab308"; // yellow
+          else markerColor = "#ef4444";             // red
+        }
+
+        // Build prediction text lines
+        let predHtml = "Prediction (next 3 days):<br/><div class='popup-pred-lines'>";
+        predictions.forEach(p => {
+          const val = (p && typeof p.score === "number")
+            ? `${p.score.toFixed(0)}%`
+            : "n/a";
+          predHtml += `${p.dateLabel}: ${val}<br/>`;
+        });
+        predHtml += "</div>";
 
         const popupHtml = `
           <div class="popup-title">${spot.name}</div>
           <div class="popup-stats">${statsLine}</div>
           <div class="popup-weather-text">${weatherText}</div>
-          <div class="popup-pred-text">${scoreText}</div>
+          <div class="popup-pred-text">${predHtml}</div>
           <div class="popup-links">
             <a class="tiny-secondary-btn"
                href="spot.html?id=${encodeURIComponent(spot.id)}">
@@ -220,14 +404,12 @@
           </div>
         `;
 
-        // Marker color: green / yellow / red based on prediction
-        let color = markerColor;
         const marker = L.circleMarker(
           [spot.latitude, spot.longitude],
           {
             radius: 8,
-            color,
-            fillColor: color,
+            color: markerColor,
+            fillColor: markerColor,
             fillOpacity: 0.9,
             weight: 2
           }
@@ -242,7 +424,7 @@
       }
     }
 
-    /* ---------- LOAD DATA ---------- */
+    /* ---------- LOAD DATA HELPERS ---------- */
     async function loadSpots() {
       const q = query(
         collection(db, "spots"),
@@ -259,140 +441,6 @@
       );
       const snap = await getDocs(q);
       return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    }
-
-    /* ---------- WEATHER + PREDICTION FOR ONE SPOT ---------- */
-    async function fetchWeatherAndPrediction(spot, spotCatches) {
-      // Default values
-      let weatherText = "Weather: failed to load";
-      let predictionScore = null;
-      let markerColor = "#60a5fa"; // blue as neutral fallback
-
-      try {
-        const lat = spot.latitude;
-        const lng = spot.longitude;
-
-        const url =
-          `https://api.open-meteo.com/v1/forecast` +
-          `?latitude=${lat}&longitude=${lng}` +
-          `&current_weather=true` +
-          `&hourly=temperature_2m,windspeed_10m,surface_pressure` +
-          `&timezone=auto`;
-
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Open-Meteo error");
-        const data = await res.json();
-
-        /* ----- Live weather text ----- */
-        const cw = data.current_weather || {};
-        const temp    = typeof cw.temperature === "number" ? cw.temperature : null;
-        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
-        const windMs  = windKmh != null ? windKmh / 3.6 : null;
-        const code    = cw.weathercode;
-
-        const { icon, label } = getWeatherIconAndLabel(code);
-
-        const weatherParts = [];
-        if (label)          weatherParts.push(label);
-        if (temp != null)   weatherParts.push(`${temp.toFixed(1)} °C`);
-        if (windMs != null) weatherParts.push(`wind ${windMs.toFixed(1)} m/s`);
-
-        weatherText = weatherParts.length
-          ? `Weather now: ${icon} ${weatherParts.join(", ")}`
-          : "Weather: not available";
-
-        /* ----- Forecast for tomorrow (for prediction) ----- */
-        const hourly = data.hourly || {};
-        const times  = hourly.time || [];
-        const temps  = hourly.temperature_2m || [];
-        const winds  = hourly.windspeed_10m || [];
-        const presses= hourly.surface_pressure || [];
-
-        if (!times.length || !temps.length || !winds.length || !presses.length) {
-          return { weatherText, predictionScore, markerColor };
-        }
-
-        const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(now.getDate() + 1);
-
-        const yyyy = tomorrow.getFullYear();
-        const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
-        const dd = String(tomorrow.getDate()).padStart(2, "0");
-        const tomorrowStr = `${yyyy}-${mm}-${dd}`;
-
-        // Prefer 12:00 for tomorrow, else first hour of that day
-        let idx = times.findIndex(t => t.startsWith(`${tomorrowStr}T12`));
-        if (idx === -1) {
-          idx = times.findIndex(t => t.startsWith(tomorrowStr));
-        }
-        if (idx === -1) {
-          return { weatherText, predictionScore, markerColor };
-        }
-
-        const forecastTemp   = temps[idx];
-        const forecastWindKmh= winds[idx];
-        const forecastWindMs = forecastWindKmh / 3.6;
-        const forecastPress  = presses[idx];
-
-        /* ----- Prediction score based on historical catches ----- */
-        const usable = spotCatches.filter(c =>
-          typeof c.weatherTemp     === "number" &&
-          typeof c.weatherWindMs   === "number" &&
-          typeof c.weatherPressure === "number"
-        );
-
-        if (!usable.length) {
-          predictionScore = null;
-          markerColor = "#60a5fa"; // neutral
-          return { weatherText, predictionScore, markerColor };
-        }
-
-        const scores = usable.map(c => {
-          let score = 100;
-          let penalty = 0;
-
-          // Temperature: tolerance ±5 °C
-          const tDiff = Math.abs(c.weatherTemp - forecastTemp);
-          if (tDiff > 5) {
-            penalty += (tDiff - 5) * 2;
-          }
-
-          // Wind: tolerance ±4 m/s
-          const wDiff = Math.abs(c.weatherWindMs - forecastWindMs);
-          if (wDiff > 4) {
-            penalty += (wDiff - 4) * 3;
-          }
-
-          // Pressure regimes: <1000 vs >=1000
-          if (forecastPress < 1000) {
-            if (c.weatherPressure >= 1000) penalty += 10;
-          } else {
-            if (c.weatherPressure < 1000)  penalty += 10;
-          }
-
-          score = Math.max(0, Math.min(100, 100 - penalty));
-          return score;
-        });
-
-        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-        predictionScore = avgScore;
-
-        // Marker color based on score
-        if (predictionScore >= 70) {
-          markerColor = "#22c55e"; // green
-        } else if (predictionScore >= 40) {
-          markerColor = "#eab308"; // yellow
-        } else {
-          markerColor = "#ef4444"; // red
-        }
-
-        return { weatherText, predictionScore, markerColor };
-
-      } catch (err) {
-        console.error("Weather/prediction error for spot", spot?.name, err);
-        return { weatherText, predictionScore, markerColor };
-      }
     }
   </script>
 </body>
