@@ -93,7 +93,7 @@
       query, where, doc, getDoc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /* FIREBASE CONFIG (same as other pages) */
+    /* FIREBASE CONFIG */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -172,7 +172,6 @@
     async function loadSpotAndCatches() {
       if (!spotId) return;
 
-      // Load spot
       const spotRef = doc(db, "spots", spotId);
       const spotSnap = await getDoc(spotRef);
       if (!spotSnap.exists()) {
@@ -192,7 +191,6 @@
         spotSubtitleEl.textContent = `This spot has no GPS coordinates – predictions may not work.`;
       }
 
-      // Load catches for this spot & user
       const q = query(
         collection(db, "catches"),
         where("userId", "==", currentUser.uid),
@@ -202,7 +200,7 @@
       catchesForSpot = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 
-    // 🔎 Map Open-Meteo weather codes to icon + label (for display only)
+    // Weather code → icon/label (display only)
     function getWeatherIconAndLabel(code) {
       if (code === 0) return { icon: "☀️", label: "Clear sky" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
@@ -219,7 +217,7 @@
       return { icon: "❓", label: "Unknown weather" };
     }
 
-    // Weekday short labels: Sun., Mon., Tues., Wed., Thurs., Fri., Sat.
+    // weekday label
     function formatWeekdayShort(dateStr) {
       const d = new Date(dateStr + "T12:00:00");
       const idx = d.getDay();
@@ -227,19 +225,19 @@
       return names[idx] ?? dateStr;
     }
 
-    /* 🌙 Simple moon phase calculator (0..1)
-       0   = new moon
-       0.5 = full moon
-       Based on days since known new moon (Jan 6, 2000 18:14 UTC) and synodic month ~29.530588 days.
-    */
+    // new: 9.12.2025 style
+    function formatDotDate(d) {
+      return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+    }
+
+    /* 🌙 Moon phase helpers */
     function moonPhaseIndex(date) {
       const synodicMonth = 29.530588853;
-      const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14); // 2000-01-06 18:14 UTC
-
+      const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
       const time = date.getTime();
       const daysSince = (time - knownNewMoon) / (1000 * 60 * 60 * 24);
       let phase = daysSince / synodicMonth;
-      phase = phase - Math.floor(phase); // wrap 0..1
+      phase = phase - Math.floor(phase);
       return phase; // 0..1
     }
 
@@ -254,7 +252,7 @@
       return "Waning crescent";
     }
 
-    /* FETCH FORECAST FOR THIS SPOT (daily + hourly) */
+    /* Forecast: daily + hourly */
     async function getForecastForSpot() {
       if (!spot || typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
         return null;
@@ -268,13 +266,10 @@
         `&forecast_days=7&timezone=auto`;
 
       const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error("Forecast error");
-      }
+      if (!res.ok) throw new Error("Forecast error");
 
       const data = await res.json();
 
-      // Daily
       const daily = data.daily || {};
       const dTimes = daily.time || [];
       const dTemps = daily.temperature_2m_max || [];
@@ -298,7 +293,6 @@
         });
       }
 
-      // Hourly
       const hourly = data.hourly || {};
       const hTimes = hourly.time || [];
       const hTemps = hourly.temperature_2m || [];
@@ -317,7 +311,6 @@
       return { daily: dailyDays, hourly: hourlyForecast };
     }
 
-    // Find hourly forecast for given date and catch hour (closest hour on that date)
     function getHourlyForDateAndCatchHour(forecast, dateStr, catchHour) {
       const times = forecast.hourly.time;
       if (!times || !times.length) return null;
@@ -360,7 +353,7 @@
       };
     }
 
-    /* RENDER PREDICTIONS FOR THIS SPOT (with detailed debug + moon phase) */
+    /* RENDER PREDICTIONS (next 3 days starting TOMORROW) */
     async function renderPredictions() {
       predictionsContainer.innerHTML = "";
       if (debugContainer) {
@@ -403,12 +396,14 @@
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const dayScores = []; // {date, score, matches, temp, windMs, code, pressureMean, debugLines}
+      const dayScores = [];
 
       for (const day of forecast.daily) {
         const dObj = new Date(day.date + "T00:00:00");
         const diffDays = Math.round((dObj - today) / (1000 * 60 * 60 * 24));
-        if (diffDays < 0 || diffDays > 2) continue; // only today + next 2 days
+
+        // 🔥 only tomorrow + next 2 days (1,2,3)
+        if (diffDays < 1 || diffDays > 3) continue;
 
         let score = 0;
         let matches = 0;
@@ -434,7 +429,6 @@
           const catchHour = catchDate.getHours();
           const catchTimeLabel = catchDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-          // Moon phase for catch date
           const catchMoonPhase = moonPhaseIndex(new Date(
             catchDate.getFullYear(), catchDate.getMonth(), catchDate.getDate()
           ));
@@ -455,7 +449,7 @@
           const tDiff = Math.abs(tForecast - tCatch);
           const wDiff = Math.abs(wForecast - wCatch);
 
-          // NEW tolerance: ±5°C and ±4 m/s
+          // tolerance: ±5°C and ±4 m/s
           if (tDiff > 5 || wDiff > 4) {
             debugLinesForDay.push(
               `- Catch @ ${catchTimeLabel}: filtered out (tDiff=${tDiff.toFixed(1)}°C > 5, wDiff=${wDiff.toFixed(1)} m/s > 4).`
@@ -463,7 +457,7 @@
             continue;
           }
 
-          // Pressure rule: low vs high at 1000 hPa
+          // pressure rule (1000 hPa)
           let pressPenalty = 0;
           let pressureNote = "pressure: n/a";
           if (pCatch != null) {
@@ -488,29 +482,27 @@
             }
           }
 
-          // 🌙 Moon phase match
-          // phase difference on circle (0..0.5)
+          // moon phase similarity
           let moonDiff = Math.abs(forecastMoonPhase - catchMoonPhase);
           if (moonDiff > 0.5) moonDiff = 1 - moonDiff;
 
           let moonPenalty = 0;
-          let moonNote = `moon: forecast=${forecastMoonLabel} (${forecastMoonPhase.toFixed(2)}),` +
-                         ` catch=${catchMoonLabel} (${catchMoonPhase.toFixed(2)}), Δ=${moonDiff.toFixed(2)}`;
-          // If moon phase difference > 0.25 (quarter cycle), ignore catch
+          let moonNote =
+            `moon: forecast=${forecastMoonLabel} (${forecastMoonPhase.toFixed(2)}),` +
+            ` catch=${catchMoonLabel} (${catchMoonPhase.toFixed(2)}), Δ=${moonDiff.toFixed(2)}`;
+
           if (moonDiff > 0.25) {
             debugLinesForDay.push(
               `- Catch @ ${catchTimeLabel}: filtered out by moon phase (${moonNote}, > 0.25).`
             );
             continue;
           } else {
-            // penalty scaled 0..1 over 0..0.25
             moonPenalty = moonDiff / 0.25;
             moonNote += `, moonPenalty=${moonPenalty.toFixed(2)}`;
           }
 
-          // penalties
-          const tempPenalty = tDiff / 5;    // 0..1
-          const windPenalty = wDiff / 4;    // 0..1
+          const tempPenalty = tDiff / 5;
+          const windPenalty = wDiff / 4;
           const totalPenalty = tempPenalty + windPenalty + pressPenalty + moonPenalty;
 
           let contributes = false;
@@ -556,7 +548,6 @@
         return;
       }
 
-      // Normalize scores to 0–100
       const scores = dayScores.map(d => d.score);
       const maxScore = Math.max(...scores);
       const minScore = Math.min(...scores);
@@ -567,10 +558,8 @@
         d.percent = Math.round(normalized * 100);
       });
 
-      // Sort by date
       dayScores.sort((a, b) => a.date.localeCompare(b.date));
 
-      // Debug view – SUPER CLEAR
       if (debugContainer) {
         debugContainer.innerHTML = "";
         dayScores.forEach(p => {
@@ -586,14 +575,13 @@
         });
       }
 
-      // UI
       predictionsContainer.innerHTML = "";
       dayScores.forEach(p => {
         const item = document.createElement("div");
         item.className = "prediction-item";
 
         const dateObj = new Date(p.date + "T12:00:00");
-        const dateStr = dateObj.toLocaleDateString();
+        const dateStr = formatDotDate(dateObj); // 🔥 9.12.2025 format
         const dayLabel = formatWeekdayShort(p.date);
 
         const { icon, label } = getWeatherIconAndLabel(p.code);
