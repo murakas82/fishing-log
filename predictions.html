@@ -2,78 +2,101 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Spot predictions</title>
+  <title>Predictions – Fishing Spot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <link rel="preconnect" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://www.googleapis.com">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    .pred-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(148,163,184,0.25);
+      font-size: 0.9rem;
+    }
+
+    .pred-row:last-child {
+      border-bottom: none;
+    }
+
+    .pred-label {
+      font-weight: 500;
+    }
+
+    .pred-score {
+      font-weight: 600;
+    }
+
+    .pred-tag {
+      font-size: 0.8rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.5);
+      margin-left: 6px;
+    }
+
+    .pred-tag-good {
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+
+    .pred-tag-medium {
+      border-color: #eab308;
+      color: #eab308;
+    }
+
+    .pred-tag-poor {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .pred-info {
+      font-size: 0.82rem;
+      opacity: 0.85;
+      margin-top: 6px;
+    }
+
+    .pred-weather-summary {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      margin-top: 4px;
+    }
+  </style>
 </head>
 
 <body>
   <div class="app fade-in">
     <header>
       <h1>Predictions</h1>
-      <p>Best fishing times for this spot based on your past catches.</p>
+      <p>Forecast match vs your past catches at this spot.</p>
     </header>
 
-    <!-- LOADING -->
-    <div id="loadingCard" class="loading-spinner-wrapper">
-      <div class="loading-spinner"></div>
-    </div>
-
-    <!-- AUTH -->
-    <div class="card" id="authCard" style="display:none;">
-      <h2>Log in</h2>
-
-      <label>Email</label>
-      <input id="authEmail" type="email">
-
-      <label>Password</label>
-      <input id="authPassword" type="password">
-
-      <div class="auth-buttons">
-        <button id="loginBtn">Log in</button>
-        <button id="signupBtn" class="secondary-btn">Sign up</button>
-      </div>
-
-      <p id="authMessage" class="auth-message"></p>
-    </div>
-
-    <!-- USER CARD -->
-    <div class="card" id="userCard" style="display:none;">
-      <div class="user-row">
+    <div class="card" id="spotHeaderCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <div>
-          <div class="user-label">Logged in as</div>
-          <div class="user-email" id="userEmail"></div>
+          <h2 id="spotNameHeading" style="margin:0 0 4px;">Loading spot…</h2>
+          <p id="spotDesc" class="pred-info" style="margin:0;">
+            Fetching data…
+          </p>
         </div>
-        <button id="logoutBtn" class="secondary-btn">Log out</button>
+        <button class="secondary-btn" id="backToSpotBtn">
+          ← Back
+        </button>
       </div>
     </div>
 
-    <!-- MAIN CONTENT -->
-    <div id="appContent" style="display:none;">
-      <div class="card">
-        <div class="spots-header-row">
-          <h2 id="spotTitle">Spot predictions</h2>
-          <button class="tiny-secondary-btn" id="backBtn">Back to main</button>
-        </div>
-        <p id="spotSubtitle" style="font-size:0.85rem; opacity:0.8;"></p>
+    <div class="card" id="predictionsCard" style="display:none;">
+      <h2>Next 3 days</h2>
+      <div id="predictionsList"></div>
+      <p class="pred-info" id="predSummary"></p>
+    </div>
 
-        <div id="predictionsContainer" class="predictions-container">
-          <p class="empty-state">Loading predictions…</p>
-        </div>
-
-        <!-- Tiny debug view -->
-        <details style="margin-top:8px;">
-          <summary style="font-size:0.8rem; opacity:0.7; cursor:pointer;">
-            Debug view (why these scores?)
-          </summary>
-          <div id="debugContainer" style="margin-top:6px; font-size:0.75rem; opacity:0.85; white-space:pre-line;">
-            <p class="empty-state">No debug data yet.</p>
-          </div>
-        </details>
-      </div>
+    <div class="card" id="debugCard" style="display:none;">
+      <h2>Data used</h2>
+      <p class="pred-info" id="debugInfo"></p>
+      <p class="pred-info" id="weatherNowInfo"></p>
     </div>
   </div>
 
@@ -82,125 +105,62 @@
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 
     import {
-      getAuth, onAuthStateChanged,
-      signInWithEmailAndPassword,
-      createUserWithEmailAndPassword,
-      signOut
+      getAuth,
+      onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     import {
-      getFirestore, collection, getDocs,
-      query, where, doc, getDoc
+      getFirestore,
+      doc, getDoc,
+      collection, getDocs,
+      query, where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /* FIREBASE CONFIG */
+    /* FIREBASE CONFIG (same as index.html) */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
       projectId: "fishing-log-app-murx",
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1656807867882",
-      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    const loadingCard = document.getElementById("loadingCard");
-    const authCard    = document.getElementById("authCard");
-    const userCard    = document.getElementById("userCard");
-    const appContent  = document.getElementById("appContent");
-    const userEmailEl = document.getElementById("userEmail");
-    const authMsgEl   = document.getElementById("authMessage");
+    const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    const emailEl = document.getElementById("authEmail");
-    const passEl  = document.getElementById("authPassword");
+    const spotNameHeading = document.getElementById("spotNameHeading");
+    const spotDesc        = document.getElementById("spotDesc");
+    const backToSpotBtn   = document.getElementById("backToSpotBtn");
 
-    const predictionsContainer = document.getElementById("predictionsContainer");
-    const debugContainer       = document.getElementById("debugContainer");
-    const spotTitleEl          = document.getElementById("spotTitle");
-    const spotSubtitleEl       = document.getElementById("spotSubtitle");
+    const predictionsCard = document.getElementById("predictionsCard");
+    const predictionsList = document.getElementById("predictionsList");
+    const predSummary     = document.getElementById("predSummary");
 
-    const backBtn = document.getElementById("backBtn");
-    backBtn.onclick = () => window.location.href = "index.html";
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const spotId = urlParams.get("spotId");
+    const debugCard       = document.getElementById("debugCard");
+    const debugInfo       = document.getElementById("debugInfo");
+    const weatherNowInfo  = document.getElementById("weatherNowInfo");
 
     let currentUser = null;
-    let spot = null;
-    let catchesForSpot = [];
+    let currentSpotId = null;
+    let currentSpot = null;
 
-    /* AUTH BUTTONS */
-    document.getElementById("loginBtn").onclick = async () => {
-      try { await signInWithEmailAndPassword(auth, emailEl.value, passEl.value); }
-      catch (err) { authMsgEl.textContent = err.message; }
-    };
-
-    document.getElementById("signupBtn").onclick = async () => {
-      try { await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value); }
-      catch (err) { authMsgEl.textContent = err.message; }
-    };
-
-    document.getElementById("logoutBtn").onclick = () => signOut(auth);
-
-    /* AUTH STATE */
-    onAuthStateChanged(auth, async (user) => {
-      currentUser = user;
-      loadingCard.style.display = "none";
-
-      if (!spotId) {
-        predictionsContainer.innerHTML = `<p class="empty-state">No spot selected.</p>`;
-      }
-
-      if (user) {
-        authCard.style.display   = "none";
-        userCard.style.display   = "block";
-        appContent.style.display = "block";
-        userEmailEl.textContent  = user.email;
-
-        await loadSpotAndCatches();
-        await renderPredictions();
-      } else {
-        authCard.style.display   = "block";
-        userCard.style.display   = "none";
-        appContent.style.display = "none";
-      }
-    });
-
-    async function loadSpotAndCatches() {
-      if (!spotId) return;
-
-      const spotRef = doc(db, "spots", spotId);
-      const spotSnap = await getDoc(spotRef);
-      if (!spotSnap.exists()) {
-        predictionsContainer.innerHTML =
-          `<p class="empty-state">Spot not found.</p>`;
-        return;
-      }
-
-      spot = { id: spotSnap.id, ...spotSnap.data() };
-
-      spotTitleEl.textContent = `Predictions: ${spot.name || "Unnamed spot"}`;
-
-      if (typeof spot.latitude === "number" && typeof spot.longitude === "number") {
-        spotSubtitleEl.textContent =
-          `Using GPS: ${spot.latitude.toFixed(5)}, ${spot.longitude.toFixed(5)}`;
-      } else {
-        spotSubtitleEl.textContent = `This spot has no GPS coordinates – predictions may not work.`;
-      }
-
-      const q = query(
-        collection(db, "catches"),
-        where("userId", "==", currentUser.uid),
-        where("spotId", "==", spotId)
-      );
-      const snap = await getDocs(q);
-      catchesForSpot = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    function getSpotIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("spotId");
     }
 
-    // Weather code → icon/label (display only)
+    function formatDateLabel(dateObj) {
+      const d = dateObj.getDate();
+      const m = dateObj.getMonth() + 1;
+      const y = dateObj.getFullYear();
+      const weekday = WEEKDAYS[dateObj.getDay()];
+      return `${weekday} ${d}.${m}.${y}`;
+    }
+
     function getWeatherIconAndLabel(code) {
       if (code === 0) return { icon: "☀️", label: "Clear sky" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
@@ -214,396 +174,302 @@
       if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Snow showers" };
       if (code === 95) return { icon: "⛈️", label: "Thunderstorm" };
       if (code === 96 || code === 99) return { icon: "⛈️", label: "Thunderstorm with hail" };
-      return { icon: "❓", label: "Unknown weather" };
+      return { icon: "❓", label: "Unknown" };
     }
 
-    // weekday label
-    function formatWeekdayShort(dateStr) {
-      const d = new Date(dateStr + "T12:00:00");
-      const idx = d.getDay();
-      const names = ["Sun.", "Mon.", "Tues.", "Wed.", "Thurs.", "Fri.", "Sat."];
-      return names[idx] ?? dateStr;
+    // SAME PREDICTION LOGIC AS IN spots-map.html
+    function computePredictionScoreForDay(spotCatches, forecastTemp, forecastWindMs, forecastPress, forecastMoonPhase) {
+      const usable = spotCatches.filter(c =>
+        typeof c.weatherTemp     === "number" &&
+        typeof c.weatherWindMs   === "number" &&
+        typeof c.weatherPressure === "number"
+      );
+
+      if (!usable.length) return null;
+
+      const scores = usable.map(c => {
+        let penalty = 0;
+
+        const tempDiff = Math.abs(c.weatherTemp - forecastTemp);
+        if (tempDiff > 5) {
+          penalty += (tempDiff - 5) * 2;
+        }
+
+        const windDiff = Math.abs(c.weatherWindMs - forecastWindMs);
+        if (windDiff > 4) {
+          penalty += (windDiff - 4) * 3;
+        }
+
+        if (forecastPress < 1000) {
+          if (c.weatherPressure >= 1000) penalty += 10;
+        } else {
+          if (c.weatherPressure < 1000)  penalty += 10;
+        }
+
+        const catchMoon = typeof c.moonPhase === "number" ? c.moonPhase : null;
+        if (catchMoon != null && typeof forecastMoonPhase === "number") {
+          const moonDiff = Math.abs(catchMoon - forecastMoonPhase);
+          penalty += moonDiff * 40;
+        }
+
+        let score = 100 - penalty;
+        if (score < 0) score = 0;
+        if (score > 100) score = 100;
+        return score;
+      });
+
+      return scores.reduce((a, b) => a + b, 0) / scores.length;
     }
 
-    // new: 9.12.2025 style
-    function formatDotDate(d) {
-      return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
-    }
-
-    /* 🌙 Moon phase helpers */
-    function moonPhaseIndex(date) {
-      const synodicMonth = 29.530588853;
-      const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
-      const time = date.getTime();
-      const daysSince = (time - knownNewMoon) / (1000 * 60 * 60 * 24);
-      let phase = daysSince / synodicMonth;
-      phase = phase - Math.floor(phase);
-      return phase; // 0..1
-    }
-
-    function moonPhaseLabel(phase) {
-      if (phase < 0.03 || phase > 0.97) return "New";
-      if (phase < 0.22) return "Waxing crescent";
-      if (phase < 0.28) return "First quarter";
-      if (phase < 0.47) return "Waxing gibbous";
-      if (phase < 0.53) return "Full";
-      if (phase < 0.72) return "Waning gibbous";
-      if (phase < 0.78) return "Last quarter";
-      return "Waning crescent";
-    }
-
-    /* Forecast: daily + hourly */
-    async function getForecastForSpot() {
-      if (!spot || typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
-        return null;
-      }
+    async function computeSpotWeatherAndPredictions(lat, lng, spotCatches) {
+      let weatherNowText = "Weather: failed to load";
+      const predictions = [];
 
       const url =
         `https://api.open-meteo.com/v1/forecast` +
-        `?latitude=${spot.latitude}&longitude=${spot.longitude}` +
-        `&daily=temperature_2m_max,windspeed_10m_max,weathercode,surface_pressure_mean` +
-        `&hourly=temperature_2m,windspeed_10m,weathercode,surface_pressure` +
-        `&forecast_days=7&timezone=auto`;
+        `?latitude=${lat}&longitude=${lng}` +
+        `&current_weather=true` +
+        `&hourly=temperature_2m,windspeed_10m,surface_pressure` +
+        `&daily=moon_phase` +
+        `&forecast_days=4` +
+        `&timezone=auto`;
 
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Forecast error");
-
+      if (!res.ok) throw new Error("Open-Meteo error");
       const data = await res.json();
+
+      const cw = data.current_weather || {};
+      const tempNow    = typeof cw.temperature === "number" ? cw.temperature : null;
+      const windKmhNow = typeof cw.windspeed === "number" ? cw.windspeed : null;
+      const windMsNow  = windKmhNow != null ? windKmhNow / 3.6 : null;
+      const codeNow    = cw.weathercode;
+
+      const { icon, label } = getWeatherIconAndLabel(codeNow);
+      const wParts = [];
+      if (label)          wParts.push(label);
+      if (tempNow != null)wParts.push(`${tempNow.toFixed(1)} °C`);
+      if (windMsNow != null) wParts.push(`wind ${windMsNow.toFixed(1)} m/s`);
+
+      weatherNowText = wParts.length
+        ? `Weather now: ${icon} ${wParts.join(", ")}`
+        : "Weather now: not available";
+
+      const hourly = data.hourly || {};
+      const times  = hourly.time || [];
+      const temps  = hourly.temperature_2m || [];
+      const windsK = hourly.windspeed_10m || [];
+      const presses= hourly.surface_pressure || [];
 
       const daily = data.daily || {};
       const dTimes = daily.time || [];
-      const dTemps = daily.temperature_2m_max || [];
-      const dWinds = daily.windspeed_10m_max || [];
-      const dCodes = daily.weathercode || [];
-      const dPress = daily.surface_pressure_mean || daily.mean_surface_pressure || [];
+      const dMoon  = daily.moon_phase || [];
 
-      const dailyDays = [];
-      for (let i = 0; i < dTimes.length; i++) {
-        const t = dTemps[i];
-        const w = dWinds[i];
-        const c = dCodes[i];
-        const p = Array.isArray(dPress) ? dPress[i] : undefined;
-        if (typeof t !== "number" || typeof w !== "number") continue;
-        dailyDays.push({
-          date: dTimes[i],
-          tempMax: t,
-          windMaxMs: w / 3.6,
-          code: c,
-          pressureMean: typeof p === "number" ? p : null
+      if (!times.length || !temps.length || !windsK.length || !presses.length || !dTimes.length || !dMoon.length) {
+        return { weatherNowText, predictions };
+      }
+
+      function getForecastForDayOffset(dayOffset) {
+        const base = new Date();
+        base.setDate(base.getDate() + dayOffset);
+        const yyyy = base.getFullYear();
+        const mm = String(base.getMonth() + 1).padStart(2, "0");
+        const dd = String(base.getDate()).padStart(2, "0");
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        let idx = times.findIndex(t => t.startsWith(`${dateStr}T12`));
+        if (idx === -1) {
+          idx = times.findIndex(t => t.startsWith(dateStr));
+        }
+        if (idx === -1) return null;
+
+        const fTemp  = temps[idx];
+        const fWindMs= windsK[idx] / 3.6;
+        const fPress = presses[idx];
+
+        const dIdx = dTimes.findIndex(t => t === dateStr);
+        const fMoon = dIdx >= 0 ? dMoon[dIdx] : null;
+
+        return { dateObj: base, temp: fTemp, windMs: fWindMs, press: fPress, moon: fMoon };
+      }
+
+      for (let offset = 1; offset <= 3; offset++) {
+        const fc = getForecastForDayOffset(offset);
+        if (!fc) {
+          predictions.push({
+            score: null,
+            dateLabel: formatDateLabel(new Date(new Date().setDate(new Date().getDate() + offset))),
+            forecast: null
+          });
+          continue;
+        }
+        const score = computePredictionScoreForDay(
+          spotCatches,
+          fc.temp,
+          fc.windMs,
+          fc.press,
+          fc.moon
+        );
+        predictions.push({
+          score,
+          dateLabel: formatDateLabel(fc.dateObj),
+          forecast: fc
         });
       }
 
-      const hourly = data.hourly || {};
-      const hTimes = hourly.time || [];
-      const hTemps = hourly.temperature_2m || [];
-      const hWinds = hourly.windspeed_10m || [];
-      const hPress = hourly.surface_pressure || [];
-      const hCodes = hourly.weathercode || [];
-
-      const hourlyForecast = {
-        time: hTimes,
-        temp: hTemps,
-        windMs: hWinds.map(v => typeof v === "number" ? v / 3.6 : null),
-        pressure: hPress,
-        code: hCodes
-      };
-
-      return { daily: dailyDays, hourly: hourlyForecast };
+      return { weatherNowText, predictions };
     }
 
-    function getHourlyForDateAndCatchHour(forecast, dateStr, catchHour) {
-      const times = forecast.hourly.time;
-      if (!times || !times.length) return null;
-
-      let bestIdx = -1;
-      let bestDiff = Infinity;
-
-      for (let i = 0; i < times.length; i++) {
-        const tStr = times[i];
-        if (!tStr) continue;
-
-        const d = new Date(tStr);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        const key = `${y}-${m}-${day}`;
-
-        if (key !== dateStr) continue;
-
-        const hour = d.getHours();
-        const diff = Math.abs(hour - catchHour);
-        if (diff < bestDiff) {
-          bestDiff = diff;
-          bestIdx = i;
-        }
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
       }
-
-      if (bestIdx === -1) return null;
-
-      return {
-        temp: typeof forecast.hourly.temp[bestIdx] === "number" ? forecast.hourly.temp[bestIdx] : null,
-        windMs: typeof forecast.hourly.windMs[bestIdx] === "number" ? forecast.hourly.windMs[bestIdx] : null,
-        pressure: Array.isArray(forecast.hourly.pressure)
-          ? (typeof forecast.hourly.pressure[bestIdx] === "number" ? forecast.hourly.pressure[bestIdx] : null)
-          : null,
-        code: Array.isArray(forecast.hourly.code)
-          ? forecast.hourly.code[bestIdx]
-          : null,
-        timeStr: forecast.hourly.time[bestIdx] || null
-      };
-    }
-
-    /* RENDER PREDICTIONS (next 3 days starting TOMORROW) */
-    async function renderPredictions() {
-      predictionsContainer.innerHTML = "";
-      if (debugContainer) {
-        debugContainer.innerHTML = `<p class="empty-state">No debug data yet.</p>`;
-      }
-
-      if (!spotId || !spot) {
-        predictionsContainer.innerHTML =
-          `<p class="empty-state">No spot selected or spot not found.</p>`;
+      currentUser = user;
+      currentSpotId = getSpotIdFromUrl();
+      if (!currentSpotId) {
+        spotNameHeading.textContent = "No spot selected";
+        spotDesc.textContent = "Missing spotId in URL.";
         return;
       }
 
-      const catchesWithWeather = catchesForSpot.filter(c =>
-        typeof c.weatherTemp === "number" &&
-        typeof c.weatherWindMs === "number"
+      await initPredictionsPage();
+    });
+
+    async function initPredictionsPage() {
+      const spotRef = doc(db, "spots", currentSpotId);
+      const spotSnap = await getDoc(spotRef);
+      if (!spotSnap.exists()) {
+        spotNameHeading.textContent = "Spot not found";
+        spotDesc.textContent        = "Unable to load this spot.";
+        return;
+      }
+      currentSpot = { id: spotSnap.id, ...spotSnap.data() };
+      spotNameHeading.textContent = currentSpot.name || "Unnamed spot";
+
+      spotDesc.textContent = "Loading catches and forecast…";
+
+      const q = query(
+        collection(db, "catches"),
+        where("userId", "==", currentUser.uid),
+        where("spotId", "==", currentSpot.id)
+      );
+      const snap = await getDocs(q);
+      const spotCatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const withWeather = spotCatches.filter(c =>
+        typeof c.weatherTemp     === "number" &&
+        typeof c.weatherWindMs   === "number" &&
+        typeof c.weatherPressure === "number"
       );
 
-      if (catchesWithWeather.length < 3) {
-        predictionsContainer.innerHTML =
-          `<p class="empty-state">Not enough data for this spot – you need at least 3 catches with weather.</p>`;
+      spotDesc.textContent =
+        `${spotCatches.length} total catches at this spot, ` +
+        `${withWeather.length} with weather data saved.`;
+
+      if (typeof currentSpot.latitude !== "number" || typeof currentSpot.longitude !== "number") {
+        predictionsCard.style.display = "none";
+        debugCard.style.display       = "block";
+        debugInfo.textContent         = "This spot has no GPS coordinates, so forecast-based prediction is not available.";
         return;
       }
 
-      let forecast;
       try {
-        forecast = await getForecastForSpot();
+        const { weatherNowText, predictions } =
+          await computeSpotWeatherAndPredictions(
+            currentSpot.latitude,
+            currentSpot.longitude,
+            spotCatches
+          );
+
+        predictionsCard.style.display = "block";
+        debugCard.style.display       = "block";
+
+        weatherNowInfo.textContent = weatherNowText;
+
+        renderPredictions(predictions, withWeather.length);
       } catch (err) {
         console.error(err);
-        predictionsContainer.innerHTML =
-          `<p class="empty-state">Failed to load forecast.</p>`;
+        predictionsCard.style.display = "none";
+        debugCard.style.display       = "block";
+        debugInfo.textContent = "Failed to compute predictions.";
+      }
+    }
+
+    function renderPredictions(predictions, usableCount) {
+      predictionsList.innerHTML = "";
+
+      if (!predictions.length) {
+        predictionsList.innerHTML = `<p class="pred-info">No forecast data available.</p>`;
         return;
       }
 
-      if (!forecast || !forecast.daily.length) {
-        predictionsContainer.innerHTML =
-          `<p class="empty-state">No forecast data available.</p>`;
-        return;
-      }
+      let sumScores = 0;
+      let countScores = 0;
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      predictions.forEach((p) => {
+        const row = document.createElement("div");
+        row.className = "pred-row";
 
-      const dayScores = [];
+        const left = document.createElement("div");
+        left.className = "pred-label";
+        left.textContent = p.dateLabel;
 
-      for (const day of forecast.daily) {
-        const dObj = new Date(day.date + "T00:00:00");
-        const diffDays = Math.round((dObj - today) / (1000 * 60 * 60 * 24));
+        const right = document.createElement("div");
 
-        // 🔥 only tomorrow + next 2 days (1,2,3)
-        if (diffDays < 1 || diffDays > 3) continue;
+        const scoreSpan = document.createElement("span");
+        scoreSpan.className = "pred-score";
 
-        let score = 0;
-        let matches = 0;
-        const debugLinesForDay = [];
+        let tag = document.createElement("span");
+        tag.className = "pred-tag";
 
-        const forecastMoonPhase = moonPhaseIndex(dObj);
-        const forecastMoonLabel = moonPhaseLabel(forecastMoonPhase);
+        if (typeof p.score === "number") {
+          scoreSpan.textContent = `${p.score.toFixed(0)}%`;
 
-        debugLinesForDay.push(
-          `=== ${day.date} ===` +
-          (typeof day.pressureMean === "number"
-            ? `  forecastPressure=${day.pressureMean.toFixed(1)} hPa (${day.pressureMean >= 1000 ? "high" : "low"})`
-            : "  forecastPressure=n/a") +
-          `  forecastMoon=${forecastMoonLabel} (phase=${forecastMoonPhase.toFixed(2)})`
-        );
-
-        for (const c of catchesWithWeather) {
-          const tCatch = c.weatherTemp;
-          const wCatch = c.weatherWindMs;
-          const pCatch = typeof c.weatherPressure === "number" ? c.weatherPressure : null;
-
-          const catchDate = new Date(c.timestamp || 0);
-          const catchHour = catchDate.getHours();
-          const catchTimeLabel = catchDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-          const catchMoonPhase = moonPhaseIndex(new Date(
-            catchDate.getFullYear(), catchDate.getMonth(), catchDate.getDate()
-          ));
-          const catchMoonLabel = moonPhaseLabel(catchMoonPhase);
-
-          const hourlyPoint = getHourlyForDateAndCatchHour(forecast, day.date, catchHour);
-
-          if (!hourlyPoint || hourlyPoint.temp == null || hourlyPoint.windMs == null) {
-            debugLinesForDay.push(
-              `- Catch @ ${catchTimeLabel}: NO hourly forecast match (temp/wind missing).`
-            );
-            continue;
-          }
-
-          const tForecast = hourlyPoint.temp;
-          const wForecast = hourlyPoint.windMs;
-
-          const tDiff = Math.abs(tForecast - tCatch);
-          const wDiff = Math.abs(wForecast - wCatch);
-
-          // tolerance: ±5°C and ±4 m/s
-          if (tDiff > 5 || wDiff > 4) {
-            debugLinesForDay.push(
-              `- Catch @ ${catchTimeLabel}: filtered out (tDiff=${tDiff.toFixed(1)}°C > 5, wDiff=${wDiff.toFixed(1)} m/s > 4).`
-            );
-            continue;
-          }
-
-          // pressure rule (1000 hPa)
-          let pressPenalty = 0;
-          let pressureNote = "pressure: n/a";
-          if (pCatch != null) {
-            const fPressure = typeof hourlyPoint.pressure === "number"
-              ? hourlyPoint.pressure
-              : (typeof day.pressureMean === "number" ? day.pressureMean : null);
-
-            if (fPressure != null) {
-              const forecastHigh = fPressure >= 1000;
-              const catchHigh = pCatch >= 1000;
-
-              if (forecastHigh !== catchHigh) {
-                pressPenalty = 1;
-                pressureNote =
-                  `pressure mismatch: forecast=${fPressure.toFixed(1)} (${forecastHigh ? "high" : "low"}),` +
-                  ` catch=${pCatch.toFixed(1)} (${catchHigh ? "high" : "low"})`;
-              } else {
-                pressureNote =
-                  `pressure ok: forecast=${fPressure.toFixed(1)} (${forecastHigh ? "high" : "low"}),` +
-                  ` catch=${pCatch.toFixed(1)} (${catchHigh ? "high" : "low"})`;
-              }
-            }
-          }
-
-          // moon phase similarity
-          let moonDiff = Math.abs(forecastMoonPhase - catchMoonPhase);
-          if (moonDiff > 0.5) moonDiff = 1 - moonDiff;
-
-          let moonPenalty = 0;
-          let moonNote =
-            `moon: forecast=${forecastMoonLabel} (${forecastMoonPhase.toFixed(2)}),` +
-            ` catch=${catchMoonLabel} (${catchMoonPhase.toFixed(2)}), Δ=${moonDiff.toFixed(2)}`;
-
-          if (moonDiff > 0.25) {
-            debugLinesForDay.push(
-              `- Catch @ ${catchTimeLabel}: filtered out by moon phase (${moonNote}, > 0.25).`
-            );
-            continue;
+          // category tag
+          if (p.score >= 70) {
+            tag.textContent = "Good";
+            tag.classList.add("pred-tag-good");
+          } else if (p.score >= 40) {
+            tag.textContent = "Medium";
+            tag.classList.add("pred-tag-medium");
           } else {
-            moonPenalty = moonDiff / 0.25;
-            moonNote += `, moonPenalty=${moonPenalty.toFixed(2)}`;
+            tag.textContent = "Poor";
+            tag.classList.add("pred-tag-poor");
           }
 
-          const tempPenalty = tDiff / 5;
-          const windPenalty = wDiff / 4;
-          const totalPenalty = tempPenalty + windPenalty + pressPenalty + moonPenalty;
-
-          let contributes = false;
-          let closeness = 0;
-          if (totalPenalty < 1) {
-            closeness = 1 - totalPenalty;
-            contributes = true;
-          }
-
-          matches += contributes ? 1 : 0;
-          if (contributes) {
-            const base        = 1;
-            const weightBonus = Math.max(0, Number(c.weightKg) || 0);
-            score += (base + weightBonus) * closeness;
-          }
-
-          debugLinesForDay.push(
-            `- Catch @ ${catchTimeLabel}:` +
-            ` catchTemp=${tCatch.toFixed(1)}°C, forecastTemp=${tForecast.toFixed(1)}°C (Δ=${tDiff.toFixed(1)}),` +
-            ` catchWind=${wCatch.toFixed(1)} m/s, forecastWind=${wForecast.toFixed(1)} m/s (Δ=${wDiff.toFixed(1)}),` +
-            ` ${pressureNote}, ${moonNote},` +
-            ` penalties: temp=${tempPenalty.toFixed(2)}, wind=${windPenalty.toFixed(2)},` +
-            ` pressure=${pressPenalty.toFixed(2)}, moon=${moonPenalty.toFixed(2)},` +
-            ` total=${totalPenalty.toFixed(2)}, contributes=${contributes ? "YES" : "NO"}`
-          );
+          sumScores   += p.score;
+          countScores += 1;
+        } else {
+          scoreSpan.textContent = "n/a";
+          tag.textContent = "No data";
         }
 
-        dayScores.push({
-          date: day.date,
-          score,
-          matches,
-          temp: day.tempMax,
-          windMs: day.windMaxMs,
-          code: day.code,
-          pressureMean: day.pressureMean,
-          debugLines: debugLinesForDay
-        });
-      }
+        right.appendChild(scoreSpan);
+        right.appendChild(tag);
 
-      if (!dayScores.length) {
-        predictionsContainer.innerHTML =
-          `<p class="empty-state">No useful predictions for the next 3 days.</p>`;
-        return;
-      }
-
-      const scores = dayScores.map(d => d.score);
-      const maxScore = Math.max(...scores);
-      const minScore = Math.min(...scores);
-      const range = maxScore - minScore || 1;
-
-      dayScores.forEach(d => {
-        const normalized = (d.score - minScore) / range;
-        d.percent = Math.round(normalized * 100);
+        row.appendChild(left);
+        row.appendChild(right);
+        predictionsList.appendChild(row);
       });
 
-      dayScores.sort((a, b) => a.date.localeCompare(b.date));
-
-      if (debugContainer) {
-        debugContainer.innerHTML = "";
-        dayScores.forEach(p => {
-          debugContainer.innerHTML +=
-            `${p.date} – rawScore=${p.score.toFixed(2)}, matches=${p.matches},` +
-            (typeof p.pressureMean === "number"
-              ? ` forecastPressure=${p.pressureMean.toFixed(1)} hPa (${p.pressureMean >= 1000 ? "high" : "low"})\n`
-              : ` forecastPressure=n/a\n`);
-          p.debugLines.forEach(line => {
-            debugContainer.innerHTML += `  ${line}\n`;
-          });
-          debugContainer.innerHTML += `\n`;
-        });
+      if (countScores > 0) {
+        const avg = sumScores / countScores;
+        predSummary.textContent =
+          `Average score for the next 3 days: ${avg.toFixed(0)}% ` +
+          `(based on ${usableCount} catches with weather data).`;
+      } else {
+        predSummary.textContent =
+          `No usable catches with weather data yet – predictions are not available.`;
       }
-
-      predictionsContainer.innerHTML = "";
-      dayScores.forEach(p => {
-        const item = document.createElement("div");
-        item.className = "prediction-item";
-
-        const dateObj = new Date(p.date + "T12:00:00");
-        const dateStr = formatDotDate(dateObj); // 🔥 9.12.2025 format
-        const dayLabel = formatWeekdayShort(p.date);
-
-        const { icon, label } = getWeatherIconAndLabel(p.code);
-        const weatherText =
-          `${label}, ${p.temp.toFixed(1)} °C, wind ${p.windMs.toFixed(1)} m/s`;
-
-        item.innerHTML = `
-          <div class="prediction-top">
-            <div class="prediction-spot-name">${dayLabel} – ${dateStr}</div>
-            <div class="prediction-date">Score: ${p.percent}%</div>
-          </div>
-          <div class="prediction-weather">
-            Forecast: ${icon} ${weatherText}
-          </div>
-          <div class="prediction-score">
-            Based on ${p.matches} similar catch${p.matches === 1 ? "" : "es"} (including moon phase).
-          </div>
-        `;
-
-        predictionsContainer.appendChild(item);
-      });
     }
+
+    backToSpotBtn.onclick = () => {
+      if (currentSpotId) {
+        window.location.href = `spot.html?id=${encodeURIComponent(currentSpotId)}`;
+      } else {
+        window.location.href = "index.html";
+      }
+    };
   </script>
 </body>
 </html>
