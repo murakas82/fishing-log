@@ -280,7 +280,7 @@
       }
     }
 
-    /* RENDER SPOTS (NO PREDICTIONS HERE, JUST BUTTON) */
+    /* RENDER SPOTS (with compact prediction badge under weather) */
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
       spotsEl.innerHTML = "";
@@ -342,12 +342,6 @@
                    href="add-catch.html?spotId=${encodeURIComponent(spot.id)}">
                    Add catch
                 </a>
-
-                <!-- Predictions button (goes to dedicated page) -->
-                <a class="tiny-secondary-btn"
-                   href="predictions.html?spotId=${encodeURIComponent(spot.id)}">
-                   Predictions
-                </a>
               </div>
 
               <div class="spot-count">${total} catches</div>
@@ -355,6 +349,14 @@
 
             <div class="spot-stats">${statsLine}</div>
             <div class="spot-weather"></div>
+            <!-- Compact prediction badge under weather -->
+            <a
+              class="tiny-secondary-btn"
+              style="margin-top:4px; display:inline-block;"
+              href="predictions.html?spotId=${encodeURIComponent(spot.id)}"
+            >
+              Predictions (next 3 days)
+            </a>
           `;
 
           const weatherEl = block.querySelector(".spot-weather");
