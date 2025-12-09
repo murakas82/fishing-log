@@ -66,12 +66,22 @@
       <div class="card">
         <h2>Predictions</h2>
         <p style="font-size:0.8rem; opacity:0.7; margin-top:0;">
-          Best spots for the next 3 days, based on your past catches with similar weather.
-          Score shows how strong the match is (0–100%).
+          Best spots for the next 3 days, based on your past catches with similar weather
+          (matched by time of day). Score shows how strong the match is (0–100%).
         </p>
         <div id="predictionsContainer" class="predictions-container">
           <p class="empty-state">Not enough data yet – add more catches with weather.</p>
         </div>
+
+        <!-- Tiny debug view -->
+        <details style="margin-top:8px;">
+          <summary style="font-size:0.8rem; opacity:0.7; cursor:pointer;">
+            Debug view (why these scores?)
+          </summary>
+          <div id="debugContainer" style="margin-top:6px; font-size:0.75rem; opacity:0.8;">
+            <p class="empty-state">No debug data yet.</p>
+          </div>
+        </details>
       </div>
 
       <!-- FISHING SPOTS -->
@@ -128,6 +138,8 @@
     const emailEl = document.getElementById("authEmail");
     const passEl  = document.getElementById("authPassword");
     const msgEl   = document.getElementById("authMessage");
+
+    const debugContainer = document.getElementById("debugContainer");
 
     let currentUser = null;
     let catches = [];
@@ -296,6 +308,7 @@
         `https://api.open-meteo.com/v1/forecast` +
         `?latitude=${spot.latitude}&longitude=${spot.longitude}` +
         `&daily=temperature_2m_max,windspeed_10m_max,weathercode,surface_pressure_mean` +
+        `&hourly=temperature_2m,windspeed_10m,weathercode,surface_pressure` +
         `&forecast_days=7&timezone=auto`;
 
       const res = await fetch(url);
@@ -304,30 +317,48 @@
       }
 
       const data = await res.json();
-      const daily = data.daily || {};
-      const times  = daily.time || [];
-      const temps  = daily.temperature_2m_max || [];
-      const winds  = daily.windspeed_10m_max || [];
-      const codes  = daily.weathercode || [];
-      const pressures = daily.surface_pressure_mean || daily.mean_surface_pressure || [];
 
-      const days = [];
-      for (let i = 0; i < times.length; i++) {
-        const t = temps[i];
-        const w = winds[i];
-        const c = codes[i];
-        const p = Array.isArray(pressures) ? pressures[i] : undefined;
+      // Daily summary (for display)
+      const daily = data.daily || {};
+      const dTimes  = daily.time || [];
+      const dTemps  = daily.temperature_2m_max || [];
+      const dWinds  = daily.windspeed_10m_max || [];
+      const dCodes  = daily.weathercode || [];
+      const dPress  = daily.surface_pressure_mean || daily.mean_surface_pressure || [];
+
+      const dailyDays = [];
+      for (let i = 0; i < dTimes.length; i++) {
+        const t = dTemps[i];
+        const w = dWinds[i];
+        const c = dCodes[i];
+        const p = Array.isArray(dPress) ? dPress[i] : undefined;
         if (typeof t !== "number" || typeof w !== "number") continue;
-        days.push({
-          date: times[i],              // "YYYY-MM-DD"
-          temp: t,
-          windMs: w / 3.6,            // km/h → m/s
+        dailyDays.push({
+          date: dTimes[i],                   // "YYYY-MM-DD"
+          tempMax: t,
+          windMaxMs: w / 3.6,                // km/h → m/s
           code: c,
-          pressure: typeof p === "number" ? p : null   // hPa
+          pressureMean: typeof p === "number" ? p : null
         });
       }
 
-      const result = { days };
+      // Hourly forecast (for matching catch hour)
+      const hourly = data.hourly || {};
+      const hTimes = hourly.time || [];
+      const hTemps = hourly.temperature_2m || [];
+      const hWinds = hourly.windspeed_10m || [];
+      const hPress = hourly.surface_pressure || [];
+      const hCodes = hourly.weathercode || [];
+
+      const hourlyForecast = {
+        time: hTimes,
+        temp: hTemps,
+        windMs: hWinds.map(v => typeof v === "number" ? v / 3.6 : null),
+        pressure: hPress,
+        code: hCodes
+      };
+
+      const result = { daily: dailyDays, hourly: hourlyForecast };
       forecastCache[spot.id] = result;
       return result;
     }
@@ -340,10 +371,55 @@
       return names[idx] ?? dateStr;
     }
 
+    // Find hourly forecast for given date and catch hour (closest hour on that date)
+    function getHourlyForDateAndCatchHour(forecast, dateStr, catchHour) {
+      const times = forecast.hourly.time;
+      if (!times || !times.length) return null;
+
+      let bestIdx = -1;
+      let bestDiff = Infinity;
+
+      for (let i = 0; i < times.length; i++) {
+        const tStr = times[i];
+        if (!tStr) continue;
+
+        const d = new Date(tStr);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const key = `${y}-${m}-${day}`;
+
+        if (key !== dateStr) continue;
+
+        const hour = d.getHours();
+        const diff = Math.abs(hour - catchHour);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIdx = i;
+        }
+      }
+
+      if (bestIdx === -1) return null;
+
+      return {
+        temp: typeof forecast.hourly.temp[bestIdx] === "number" ? forecast.hourly.temp[bestIdx] : null,
+        windMs: typeof forecast.hourly.windMs[bestIdx] === "number" ? forecast.hourly.windMs[bestIdx] : null,
+        pressure: Array.isArray(forecast.hourly.pressure)
+          ? (typeof forecast.hourly.pressure[bestIdx] === "number" ? forecast.hourly.pressure[bestIdx] : null)
+          : null,
+        code: Array.isArray(forecast.hourly.code)
+          ? forecast.hourly.code[bestIdx]
+          : null
+      };
+    }
+
     /* PREDICTIONS: next 3 days, score 0–100% + per-spot per-day scores */
     async function renderPredictions() {
       const container = document.getElementById("predictionsContainer");
       container.innerHTML = "";
+      if (debugContainer) {
+        debugContainer.innerHTML = `<p class="empty-state">No debug data yet.</p>`;
+      }
 
       // reset per-spot per-day scores
       for (const key in spotPredictionPerDay) {
@@ -360,6 +436,10 @@
       if (catchesWithWeather.length < 5) {
         container.innerHTML =
           `<p class="empty-state">Not enough data yet – you need at least 5 catches with weather.</p>`;
+        if (debugContainer) {
+          debugContainer.innerHTML =
+            `<p class="empty-state">Not enough catches with weather for debug either.</p>`;
+        }
         return;
       }
 
@@ -392,9 +472,9 @@
           console.error("Forecast error for spot", spotId, err);
           continue;
         }
-        if (!forecast || !forecast.days.length) continue;
+        if (!forecast || !forecast.daily.length) continue;
 
-        for (const day of forecast.days) {
+        for (const day of forecast.daily) {
           // Restrict to today + next 2 days (3 days total)
           const dObj = new Date(day.date + "T00:00:00");
           const diffDays = Math.round((dObj - today) / (1000 * 60 * 60 * 24));
@@ -408,19 +488,37 @@
             const wCatch = c.weatherWindMs;
             const pCatch = typeof c.weatherPressure === "number" ? c.weatherPressure : null;
 
-            const tDiff = Math.abs(day.temp - tCatch);
-            const wDiff = Math.abs(day.windMs - wCatch);
+            // hour-of-day of this catch (local)
+            const catchDate = new Date(c.timestamp || 0);
+            const catchHour = catchDate.getHours();
+
+            const hourlyPoint = getHourlyForDateAndCatchHour(forecast, day.date, catchHour);
+            if (!hourlyPoint || hourlyPoint.temp == null || hourlyPoint.windMs == null) {
+              continue;
+            }
+
+            const tForecast = hourlyPoint.temp;
+            const wForecast = hourlyPoint.windMs;
+
+            const tDiff = Math.abs(tForecast - tCatch);
+            const wDiff = Math.abs(wForecast - wCatch);
 
             // basic similarity thresholds on temp & wind
             if (tDiff > 4 || wDiff > 3) continue;
 
-            // Pressure penalty: same side of 1000 hPa = no penalty, different side = full penalty
+            // Pressure: low (<1000) vs high (>=1000) matching rule
             let pressPenalty = 0;
-            if (pCatch != null && day.pressure != null) {
-              const forecastHigh = day.pressure >= 1000;
-              const catchHigh = pCatch >= 1000;
-              if (forecastHigh !== catchHigh) {
-                pressPenalty = 1; // maximum pressure penalty
+            if (pCatch != null) {
+              const fPressure = typeof hourlyPoint.pressure === "number"
+                ? hourlyPoint.pressure
+                : (typeof day.pressureMean === "number" ? day.pressureMean : null);
+
+              if (fPressure != null) {
+                const forecastHigh = fPressure >= 1000;
+                const catchHigh = pCatch >= 1000;
+                if (forecastHigh !== catchHigh) {
+                  pressPenalty = 1; // maximum pressure penalty if opposite side of 1000 hPa
+                }
               }
             }
 
@@ -445,9 +543,11 @@
               date: day.date,
               score,
               matches,
-              temp: day.temp,
-              windMs: day.windMs,
-              code: day.code
+              // for display we still use daily max
+              temp: day.tempMax,
+              windMs: day.windMaxMs,
+              code: day.code,
+              pressureMean: day.pressureMean
             });
           }
         }
@@ -458,6 +558,10 @@
       if (!predictions.length) {
         container.innerHTML =
           `<p class="empty-state">No useful predictions yet for the next 3 days – add more catches with weather.</p>`;
+        if (debugContainer) {
+          debugContainer.innerHTML =
+            `<p class="empty-state">No prediction rows to debug.</p>`;
+        }
         return;
       }
 
@@ -479,6 +583,22 @@
         if (!spotPredictionPerDay[sid]) spotPredictionPerDay[sid] = {};
         spotPredictionPerDay[sid][p.date] = p.percent;
       });
+
+      // 🔍 Fill tiny debug view
+      if (debugContainer) {
+        debugContainer.innerHTML = "";
+        predictions.forEach(p => {
+          const line = document.createElement("div");
+          const pressureLabel = (typeof p.pressureMean === "number")
+            ? `${p.pressureMean.toFixed(1)} hPa (${p.pressureMean >= 1000 ? "high" : "low"})`
+            : "n/a";
+          line.textContent =
+            `${p.date} – ${p.spot.name || "Unnamed spot"}: ` +
+            `rawScore=${p.score.toFixed(2)}, matches=${p.matches}, ` +
+            `forecastPressure=${pressureLabel}`;
+          debugContainer.appendChild(line);
+        });
+      }
 
       // Build Predictions card UI
       predictions.forEach(p => {
