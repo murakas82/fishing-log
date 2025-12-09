@@ -337,7 +337,7 @@ textarea {
   padding: 10px 12px;
   margin-top: 4px;
   border-radius: 10px;
-  border: 1px solid #1f2937;
+  border: 1px solid rgba(148,163,184,0.4);
   background-color: rgba(15, 23, 42, 0.9);  /* same dark background */
   color: #e5e7eb;             /* same light text */
   font-size: 0.95rem;
@@ -346,8 +346,8 @@ textarea {
 
 select:focus,
 textarea:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px rgba(56,189,248,0.6);
 }
 
 /* Optional: nicer textarea behaviour */
@@ -355,4 +355,5 @@ textarea {
   min-height: 80px;
   resize: vertical;
 }
+
 
