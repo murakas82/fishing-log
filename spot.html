@@ -1,73 +1,42 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Fishing Spot – My Fishing Log</title>
+  <title>Fishing spot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <link rel="preconnect" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://www.googleapis.com">
-
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app fade-in">
     <header>
       <h1>Fishing spot</h1>
-      <p>View and manage this spot and its catches.</p>
+      <p>See details and catches for this spot.</p>
     </header>
 
-    <!-- LOADING -->
-    <div id="loadingCard" class="loading-spinner-wrapper">
-      <div class="loading-spinner"></div>
+    <!-- Spot header -->
+    <div class="card" id="spotHeaderCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div>
+          <h2 id="spotNameHeading" style="margin:0 0 4px;">Loading spot…</h2>
+          <p id="spotInfo" class="muted-text" style="margin:0;">
+            Loading data…
+          </p>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="secondary-btn" id="backToMainBtn">← Back to main</button>
+          <button class="secondary-btn" id="addCatchBtn">Add catch</button>
+          <button class="secondary-btn" id="predictionsBtn">Predictions</button>
+        </div>
+      </div>
     </div>
 
-    <!-- NOT LOGGED IN -->
-    <div class="card" id="needLogin" style="display:none;">
-      <p>You need to be logged in to view this spot.</p>
-      <button id="goLoginBtn">Back to main page</button>
-    </div>
-
-    <!-- INVALID / NOT FOUND -->
-    <div class="card" id="notFound" style="display:none;">
-      <p>Fishing spot not found.</p>
-      <button id="backBtnNF">Back to main page</button>
-    </div>
-
-    <!-- SPOT CONTENT -->
-    <div class="card" id="spotCard" style="display:none;">
-      <p style="font-size:0.9rem; margin-bottom:10px;">
-        Logged in as <span id="userEmail"></span>
-      </p>
-
-      <h2 class="section-title">Spot details</h2>
-
-      <label>Spot name</label>
-      <input id="spotName" type="text">
-
-      <label>Latitude</label>
-      <input id="lat" type="text">
-
-      <label>Longitude</label>
-      <input id="lng" type="text">
-
-      <div id="mapsLinkContainer" class="catch-meta" style="margin-top:6px;"></div>
-
-      <div id="spotStats" class="spot-stats" style="margin-top:10px;"></div>
-
-      <button id="saveSpotBtn">Save changes</button>
-      <button id="deleteSpotBtn" class="secondary-btn" style="margin-top:6px;">Delete spot</button>
-      <button id="backBtn" class="secondary-btn" style="margin-top:6px;">Back to main page</button>
-
-      <p id="spotMessage" class="auth-message"></p>
-    </div>
-
-    <!-- CATCHES AT THIS SPOT -->
-    <div class="card" id="catchesCard" style="display:none; margin-top:10px;">
-      <h2 class="section-title">Catches at this spot</h2>
-      <div id="catchList" class="catch-list">
-        <p class="empty-state">Loading catches…</p>
+    <!-- Catches list -->
+    <div class="card">
+      <h2>Catches at this spot</h2>
+      <div id="catchesContainer">
+        <p class="muted-text">Loading catches…</p>
       </div>
     </div>
   </div>
@@ -77,304 +46,227 @@
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 
     import {
-      getAuth, onAuthStateChanged
+      getAuth,
+      onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     import {
       getFirestore,
-      doc, getDoc, updateDoc, deleteDoc,
-      collection, getDocs, query, where
+      doc,
+      getDoc,
+      collection,
+      getDocs,
+      query,
+      where,
+      deleteDoc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
+    // --- Firebase setup (same as other pages) ---
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
       projectId: "fishing-log-app-murx",
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1656807867882",
-      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    const loadingCard   = document.getElementById("loadingCard");
-    const needLoginCard = document.getElementById("needLogin");
-    const notFoundCard  = document.getElementById("notFound");
-    const spotCard      = document.getElementById("spotCard");
-    const catchesCard   = document.getElementById("catchesCard");
-
-    const userEmailEl   = document.getElementById("userEmail");
-    const spotNameInput = document.getElementById("spotName");
-    const latInput      = document.getElementById("lat");
-    const lngInput      = document.getElementById("lng");
-    const mapsLinkContainer = document.getElementById("mapsLinkContainer");
-    const spotStatsEl   = document.getElementById("spotStats");
-    const spotMsgEl     = document.getElementById("spotMessage");
-    const catchListEl   = document.getElementById("catchList");
-
-    document.getElementById("goLoginBtn").onclick = () => {
-      window.location.href = "index.html";
-    };
-    document.getElementById("backBtn").onclick = () => {
-      window.location.href = "index.html";
-    };
-    document.getElementById("backBtnNF").onclick = () => {
-      window.location.href = "index.html";
-    };
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const spotId = urlParams.get("id");
-
-    if (!spotId) {
-      // no id in URL -> show not found
-      loadingCard.style.display = "none";
-      notFoundCard.style.display = "block";
-    }
+    const spotNameHeading   = document.getElementById("spotNameHeading");
+    const spotInfoEl        = document.getElementById("spotInfo");
+    const catchesContainer  = document.getElementById("catchesContainer");
+    const backToMainBtn     = document.getElementById("backToMainBtn");
+    const addCatchBtn       = document.getElementById("addCatchBtn");
+    const predictionsBtn    = document.getElementById("predictionsBtn");
 
     let currentUser = null;
-    let spotDocData = null;
-    let spotCatches = [];
+    let currentSpot = null;
+
+    function getSpotIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("id");
+    }
+
+    function formatDate(timestamp) {
+      if (!timestamp) return "";
+      const d = new Date(timestamp);
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
 
     onAuthStateChanged(auth, async (user) => {
-      if (!spotId) return;
-
-      currentUser = user;
       if (!user) {
-        loadingCard.style.display = "none";
-        needLoginCard.style.display = "block";
+        window.location.href = "index.html";
+        return;
+      }
+      currentUser = user;
+      const spotId = getSpotIdFromUrl();
+      if (!spotId) {
+        spotNameHeading.textContent = "No spot selected";
+        spotInfoEl.textContent = "Missing id in URL.";
+        catchesContainer.innerHTML = "";
         return;
       }
 
-      userEmailEl.textContent = user.email;
-
-      try {
-        await loadSpotAndCatches(user);
-      } catch (err) {
-        console.error(err);
-        loadingCard.style.display = "none";
-        notFoundCard.style.display = "block";
-      }
+      await loadSpot(spotId);
+      await loadCatches(spotId);
     });
 
-    async function loadSpotAndCatches(user) {
-      // Load spot
-      const ref = doc(db, "spots", spotId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) {
-        loadingCard.style.display = "none";
-        notFoundCard.style.display = "block";
-        return;
-      }
+    async function loadSpot(spotId) {
+      try {
+        const spotRef = doc(db, "spots", spotId);
+        const snap = await getDoc(spotRef);
+        if (!snap.exists()) {
+          spotNameHeading.textContent = "Spot not found";
+          spotInfoEl.textContent = "This spot does not exist.";
+          return;
+        }
+        currentSpot = { id: snap.id, ...snap.data() };
+        spotNameHeading.textContent = currentSpot.name || "Unnamed spot";
 
-      const data = snap.data();
-      // Basic check that it belongs to this user
-      if (data.userId && data.userId !== user.uid) {
-        loadingCard.style.display = "none";
-        notFoundCard.style.display = "block";
-        return;
-      }
-
-      spotDocData = { id: snap.id, ...data };
-
-      // Load catches at this spot (by spotId)
-      const q = query(
-        collection(db, "catches"),
-        where("spotId", "==", spotId)
-      );
-      const catchSnap = await getDocs(q);
-      spotCatches = catchSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(c => !c.userId || c.userId === user.uid); // safety filter
-
-      renderSpot();
-      renderCatches();
-
-      loadingCard.style.display = "none";
-      spotCard.style.display    = "block";
-      catchesCard.style.display = "block";
-    }
-
-    function renderSpot() {
-      if (!spotDocData) return;
-
-      spotNameInput.value = spotDocData.name || "";
-      if (typeof spotDocData.latitude === "number") {
-        latInput.value = spotDocData.latitude.toFixed(6);
-      } else {
-        latInput.value = "";
-      }
-      if (typeof spotDocData.longitude === "number") {
-        lngInput.value = spotDocData.longitude.toFixed(6);
-      } else {
-        lngInput.value = "";
-      }
-
-      // Google Maps link
-      const hasCoords =
-        typeof spotDocData.latitude === "number" &&
-        typeof spotDocData.longitude === "number";
-
-      if (hasCoords) {
-        const lat = spotDocData.latitude;
-        const lng = spotDocData.longitude;
-        const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-        mapsLinkContainer.innerHTML = `
-          <a href="${mapsUrl}" target="_blank" class="maps-link">
-            View this spot in Google Maps
-          </a>
-        `;
-      } else {
-        mapsLinkContainer.textContent = "No GPS coordinates saved for this spot.";
-      }
-
-      // Stats for this spot
-      const total = spotCatches.length;
-      if (!total) {
-        spotStatsEl.textContent = "No catches yet at this spot.";
-      } else {
-        let biggest = spotCatches[0];
-        spotCatches.forEach(c => {
-          const w = Number(c.weightKg) || 0;
-          if (w > (Number(biggest.weightKg) || 0)) biggest = c;
-        });
-        const biggestText = `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species || ""}`;
-        spotStatsEl.textContent = `Total catches: ${total} • Biggest: ${biggestText}`;
+        const infoParts = [];
+        if (typeof currentSpot.latitude === "number" &&
+            typeof currentSpot.longitude === "number") {
+          infoParts.push(
+            `Location: ${currentSpot.latitude.toFixed(4)}, ${currentSpot.longitude.toFixed(4)}`
+          );
+        }
+        if (infoParts.length === 0) {
+          spotInfoEl.textContent = "No additional info.";
+        } else {
+          spotInfoEl.textContent = infoParts.join(" • ");
+        }
+      } catch (err) {
+        console.error(err);
+        spotNameHeading.textContent = "Error loading spot";
+        spotInfoEl.textContent = "Failed to load spot data.";
       }
     }
 
-    function renderCatches() {
-      catchListEl.innerHTML = "";
+    async function loadCatches(spotId) {
+      catchesContainer.innerHTML = `<p class="muted-text">Loading catches…</p>`;
 
-      if (!spotCatches.length) {
-        catchListEl.innerHTML =
-          `<p class="empty-state">You have no catches at this spot yet.</p>`;
-        return;
-      }
+      try {
+        const q = query(
+          collection(db, "catches"),
+          where("userId", "==", currentUser.uid),
+          where("spotId", "==", spotId)
+        );
+        const snap = await getDocs(q);
+        const catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      spotCatches
-        .slice()
-        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-        .forEach(c => {
+        if (!catches.length) {
+          catchesContainer.innerHTML =
+            `<p class="muted-text">No catches logged at this spot yet.</p>`;
+          return;
+        }
+
+        catches.sort((a, b) => b.timestamp - a.timestamp);
+
+        catchesContainer.innerHTML = "";
+        for (const c of catches) {
           const div = document.createElement("div");
-          div.className = "catch-item";
+          div.style.marginBottom = "16px";
 
-          const dateStr = c.timestamp
-            ? new Date(c.timestamp).toLocaleDateString()
-            : "";
+          const species = c.species || "Unknown species";
+          const weight = typeof c.weightKg === "number" && !isNaN(c.weightKg)
+            ? `${c.weightKg.toFixed(2)} kg`
+            : "-";
 
-          const weight =
-            c.weightKg !== undefined && c.weightKg !== null
-              ? `${Number(c.weightKg).toFixed(2)} kg`
+          const dateStr = formatDate(c.timestamp);
+
+          const lure = c.lure && c.lure.trim().length > 0 ? c.lure.trim() : "-";
+
+          const depthStr =
+            typeof c.depth === "number" && !isNaN(c.depth)
+              ? `${c.depth.toFixed(1)} m`
               : "-";
 
-          const lure = c.lure || "-";
-          const depth = c.depth != null ? `${c.depth} m` : "-";
-          const temp = c.temperature != null ? `${c.temperature} °C` : "-";
+          const waterTempStr =
+            typeof c.waterTemp === "number" && !isNaN(c.waterTemp)
+              ? `${c.waterTemp.toFixed(1)} °C`
+              : "-";
 
-          let weatherLine = "-";
-          if (typeof c.weatherTemp === "number" && c.weatherDescription) {
-            weatherLine = `${c.weatherTemp.toFixed(1)} °C, ${c.weatherDescription}`;
-          } else if (typeof c.weatherTemp === "number") {
-            weatherLine = `${c.weatherTemp.toFixed(1)} °C`;
+          // 🔧 Weather text: use description if available, otherwise build from pieces.
+          let weatherText = "-";
+          if (c.weatherDescription && c.weatherDescription.trim().length > 0) {
+            // description already contains temp + wind → use only this
+            weatherText = c.weatherDescription;
+          } else {
+            const parts = [];
+            if (typeof c.weatherTemp === "number" && !isNaN(c.weatherTemp)) {
+              parts.push(`${c.weatherTemp.toFixed(1)} °C`);
+            }
+            if (c.weatherCondition && c.weatherCondition.trim().length > 0) {
+              parts.push(c.weatherCondition.trim());
+            }
+            if (typeof c.weatherWindMs === "number" && !isNaN(c.weatherWindMs)) {
+              parts.push(`wind ${c.weatherWindMs.toFixed(1)} m/s`);
+            }
+            if (parts.length) {
+              weatherText = parts.join(", ");
+            }
           }
 
           div.innerHTML = `
-            <div class="catch-top">
-              <span>${c.species || "Unknown species"} • ${weight}</span>
-              <span>${dateStr}</span>
+            <div>
+              <strong>${species}</strong> • ${weight} ${dateStr}<br/>
+              Lure: ${lure}<br/>
+              Depth: ${depthStr}<br/>
+              Water temp: ${waterTempStr}<br/>
+              Weather at time of catch: ${weatherText}
             </div>
-            <div class="catch-meta">Lure: ${lure}</div>
-            <div class="catch-meta">Depth: ${depth}</div>
-            <div class="catch-meta">Water temp: ${temp}</div>
-            <div class="catch-meta">Weather at time of catch: ${weatherLine}</div>
-            <div class="catch-notes">${c.notes || ""}</div>
           `;
 
-          const delBtn = document.createElement("button");
-          delBtn.className = "delete-btn";
-          delBtn.textContent = "Delete catch";
-          delBtn.onclick = async () => {
-            if (!confirm("Delete this catch?")) return;
-            try {
-              await deleteDoc(doc(db, "catches", c.id));
-              spotCatches = spotCatches.filter(x => x.id !== c.id);
-              renderCatches();
-              renderSpot();
-            } catch (err) {
-              console.error(err);
-              alert("Error deleting catch.");
-            }
-          };
+          const btn = document.createElement("button");
+          btn.textContent = "Delete catch";
+          btn.className = "danger-btn";
+          btn.style.marginTop = "6px";
+          btn.onclick = () => handleDeleteCatch(c.id);
 
-          div.appendChild(delBtn);
-          catchListEl.appendChild(div);
-        });
+          div.appendChild(document.createElement("br"));
+          div.appendChild(btn);
+
+          catchesContainer.appendChild(div);
+        }
+      } catch (err) {
+        console.error(err);
+        catchesContainer.innerHTML =
+          `<p class="muted-text">Failed to load catches.</p>`;
+      }
     }
 
-    // SAVE SPOT CHANGES
-    document.getElementById("saveSpotBtn").onclick = async () => {
-      if (!spotDocData || !currentUser) return;
-
-      const newName = spotNameInput.value.trim();
-      const lat = parseFloat(latInput.value);
-      const lng = parseFloat(lngInput.value);
-
-      if (!newName) {
-        spotMsgEl.textContent = "Spot name is required.";
-        return;
-      }
-
+    async function handleDeleteCatch(catchId) {
+      if (!confirm("Delete this catch? This cannot be undone.")) return;
       try {
-        spotMsgEl.textContent = "Saving spot and updating catches…";
-
-        const ref = doc(db, "spots", spotId);
-        await updateDoc(ref, {
-          name: newName,
-          latitude: isNaN(lat) ? null : lat,
-          longitude: isNaN(lng) ? null : lng
-        });
-
-        // Update local copy
-        spotDocData.name = newName;
-        spotDocData.latitude = isNaN(lat) ? null : lat;
-        spotDocData.longitude = isNaN(lng) ? null : lng;
-
-        // Update spotName in all catches of this spot
-        for (const c of spotCatches) {
-          const cref = doc(db, "catches", c.id);
-          await updateDoc(cref, { spotName: newName });
-          c.spotName = newName;
-        }
-
-        renderSpot();
-        spotMsgEl.textContent = "Spot updated.";
+        await deleteDoc(doc(db, "catches", catchId));
+        // Reload catches list
+        await loadCatches(currentSpot.id);
       } catch (err) {
         console.error(err);
-        spotMsgEl.textContent = "Error saving spot.";
+        alert("Failed to delete catch.");
       }
+    }
+
+    backToMainBtn.onclick = () => {
+      window.location.href = "index.html";
     };
 
-    // DELETE SPOT (only if no catches)
-    document.getElementById("deleteSpotBtn").onclick = async () => {
-      if (!spotDocData || !currentUser) return;
+    addCatchBtn.onclick = () => {
+      if (!currentSpot) return;
+      window.location.href =
+        `add-catch.html?spotId=${encodeURIComponent(currentSpot.id)}`;
+    };
 
-      if (spotCatches.length > 0) {
-        spotMsgEl.textContent =
-          "You must delete all catches at this spot before deleting the spot.";
-        return;
-      }
-
-      if (!confirm("Delete this spot? This cannot be undone.")) return;
-
-      try {
-        await deleteDoc(doc(db, "spots", spotId));
-        window.location.href = "index.html";
-      } catch (err) {
-        console.error(err);
-        spotMsgEl.textContent = "Error deleting spot.";
-      }
+    predictionsBtn.onclick = () => {
+      if (!currentSpot) return;
+      window.location.href =
+        `predictions.html?spotId=${encodeURIComponent(currentSpot.id)}`;
     };
   </script>
 </body>
