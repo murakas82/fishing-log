@@ -95,7 +95,6 @@
     crossorigin=""
   ></script>
 
-  <!-- Firebase + map logic -->
   <script type="module">
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -111,7 +110,7 @@
       query, where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /* FIREBASE CONFIG (same as index.html) */
+    /* ------------ Firebase config (same as other pages) ------------ */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -129,10 +128,12 @@
 
     const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+    /* ------------ Helpers ------------ */
+
     function getWeatherIconAndLabel(code) {
       if (code === 0) return { icon: "☀️", label: "Clear sky" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
-      if (code === 2) return { icon: "⛅", label: "Partly cloudy" };
+      if (code === 2) return { icon: "⛅",  label: "Partly cloudy" };
       if (code === 3) return { icon: "☁️", label: "Overcast" };
       if (code === 45 || code === 48) return { icon: "🌫️", label: "Fog" };
       if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Drizzle" };
@@ -153,9 +154,25 @@
       return `${weekday} ${d}.${m}.${y}`;
     }
 
-    /* ---------- CORE PREDICTION LOGIC (shared with predictions.html) ---------- */
+    // Simple approximate moon phase (0..1)
+    function getApproxMoonPhase(date) {
+      const lp = 2551443; // length of lunar cycle in seconds
+      const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14); // reference new moon
+      const diff = date.getTime() - knownNewMoon;
+      const phase = (diff / 1000) % lp;
+      let frac = phase / lp;
+      if (frac < 0) frac += 1;
+      return frac; // 0..1
+    }
 
-    function computePredictionScoreForDay(spotCatches, forecastTemp, forecastWindMs, forecastPress, forecastMoonPhase) {
+    /* --- prediction score (same logic as predictions.html) --- */
+    function computePredictionScoreForDay(
+      spotCatches,
+      forecastTemp,
+      forecastWindMs,
+      forecastPress,
+      forecastMoonPhase
+    ) {
       const usable = spotCatches.filter(c =>
         typeof c.weatherTemp     === "number" &&
         typeof c.weatherWindMs   === "number" &&
@@ -177,13 +194,15 @@
           penalty += (windDiff - 4) * 3;
         }
 
+        // pressure rule
         if (forecastPress < 1000) {
           if (c.weatherPressure >= 1000) penalty += 10;
         } else {
           if (c.weatherPressure < 1000)  penalty += 10;
         }
 
-        const catchMoon = typeof c.moonPhase === "number" ? c.moonPhase : null;
+        const catchMoon =
+          typeof c.moonPhase === "number" ? c.moonPhase : null;
         if (catchMoon != null && typeof forecastMoonPhase === "number") {
           const moonDiff = Math.abs(catchMoon - forecastMoonPhase);
           penalty += moonDiff * 40;
@@ -198,6 +217,7 @@
       return scores.reduce((a, b) => a + b, 0) / scores.length;
     }
 
+    /* --- Weather + prediction fetch, using NEW Open-Meteo API --- */
     async function computeSpotWeatherAndPredictions(lat, lng, spotCatches) {
       let weatherText = "Weather: failed to load";
       const predictions = [];
@@ -206,44 +226,42 @@
         const url =
           `https://api.open-meteo.com/v1/forecast` +
           `?latitude=${lat}&longitude=${lng}` +
-          `&current_weather=true` +
-          `&hourly=temperature_2m,windspeed_10m,pressure_msl` +   /* FIXED HERE */
-          `&daily=moon_phase` +
+          `&current=temperature_2m,wind_speed_10m,weather_code` +
+          `&hourly=temperature_2m,wind_speed_10m,pressure_msl` +
           `&forecast_days=4` +
+          `&wind_speed_unit=ms` +
           `&timezone=auto`;
 
         const res = await fetch(url);
         if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
         const data = await res.json();
 
-        // Live weather
-        const cw = data.current_weather || {};
-        const tempNow    = typeof cw.temperature === "number" ? cw.temperature : null;
-        const windKmhNow = typeof cw.windspeed === "number" ? cw.windspeed : null;
-        const windMsNow  = windKmhNow != null ? windKmhNow / 3.6 : null;
-        const codeNow    = cw.weathercode;
+        // --- current weather (new "current" block) ---
+        const cur = data.current || {};
+        const tempNow =
+          typeof cur.temperature_2m === "number" ? cur.temperature_2m : null;
+        const windMsNow =
+          typeof cur.wind_speed_10m === "number" ? cur.wind_speed_10m : null;
+        const codeNow = cur.weather_code;
 
         const { icon, label } = getWeatherIconAndLabel(codeNow);
         const wParts = [];
-        if (label)          wParts.push(label);
-        if (tempNow != null)wParts.push(`${tempNow.toFixed(1)} °C`);
+        if (label) wParts.push(label);
+        if (tempNow != null) wParts.push(`${tempNow.toFixed(1)} °C`);
         if (windMsNow != null) wParts.push(`wind ${windMsNow.toFixed(1)} m/s`);
 
         weatherText = wParts.length
           ? `Weather now: ${icon} ${wParts.join(", ")}`
           : "Weather: not available";
 
+        // --- hourly forecast arrays ---
         const hourly = data.hourly || {};
-        const times  = hourly.time || [];
-        const temps  = hourly.temperature_2m || [];
-        const windsK = hourly.windspeed_10m || [];
-        const presses= hourly.pressure_msl || [];                 /* FIXED HERE */
+        const times   = hourly.time || [];
+        const temps   = hourly.temperature_2m || [];
+        const windsMs = hourly.wind_speed_10m || [];
+        const presses = hourly.pressure_msl || [];
 
-        const daily = data.daily || {};
-        const dTimes = daily.time || [];
-        const dMoon  = daily.moon_phase || [];
-
-        if (!times.length || !temps.length || !windsK.length || !presses.length || !dTimes.length || !dMoon.length) {
+        if (!times.length || !temps.length || !windsMs.length || !presses.length) {
           return { weatherText, predictions };
         }
 
@@ -255,20 +273,25 @@
           const dd = String(base.getDate()).padStart(2, "0");
           const dateStr = `${yyyy}-${mm}-${dd}`;
 
+          // try to use ~12:00 local forecast
           let idx = times.findIndex(t => t.startsWith(`${dateStr}T12`));
           if (idx === -1) {
             idx = times.findIndex(t => t.startsWith(dateStr));
           }
           if (idx === -1) return null;
 
-          const fTemp = temps[idx];
-          const fWindMs = windsK[idx] / 3.6;
+          const fTemp  = temps[idx];
+          const fWind  = windsMs[idx];
           const fPress = presses[idx];
+          const fMoon  = getApproxMoonPhase(base);
 
-          const dIdx = dTimes.findIndex(t => t === dateStr);
-          const fMoon = dIdx >= 0 ? dMoon[dIdx] : null;
-
-          return { dateObj: base, temp: fTemp, windMs: fWindMs, press: fPress, moon: fMoon };
+          return {
+            dateObj: base,
+            temp: fTemp,
+            windMs: fWind,
+            press: fPress,
+            moon: fMoon
+          };
         }
 
         for (let offset = 1; offset <= 3; offset++) {
@@ -276,7 +299,9 @@
           if (!fc) {
             predictions.push({
               score: null,
-              dateLabel: formatDateLabel(new Date(new Date().setDate(new Date().getDate() + offset)))
+              dateLabel: formatDateLabel(
+                new Date(new Date().setDate(new Date().getDate() + offset))
+              )
             });
             continue;
           }
@@ -294,7 +319,6 @@
             dateLabel: formatDateLabel(fc.dateObj)
           });
         }
-
       } catch (err) {
         console.error("Weather/prediction error:", err);
         weatherText = "Weather error: " + (err.message || String(err));
@@ -303,14 +327,13 @@
       return { weatherText, predictions };
     }
 
-    /* ---------- AUTH + MAP ---------- */
+    /* ------------ Auth + map init ------------ */
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
         window.location.href = "index.html";
         return;
       }
-
       currentUser = user;
       await initMapPage();
     });
@@ -331,7 +354,8 @@
       const bounds = [];
 
       for (const spot of spots) {
-        if (typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
+        if (typeof spot.latitude !== "number" ||
+            typeof spot.longitude !== "number") {
           continue;
         }
 
@@ -351,18 +375,23 @@
         }
 
         const { weatherText, predictions } =
-          await computeSpotWeatherAndPredictions(spot.latitude, spot.longitude, spotCatches);
+          await computeSpotWeatherAndPredictions(
+            spot.latitude,
+            spot.longitude,
+            spotCatches
+          );
 
         const mapsLink =
           `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`;
 
+        // marker color by tomorrow's score
         let markerColor = "#60a5fa";
-        const tomorrowPred = predictions[0];
-        if (tomorrowPred && typeof tomorrowPred.score === "number") {
-          const s = tomorrowPred.score;
-          if (s >= 70) markerColor = "#22c55e";
+        const tomorrow = predictions[0];
+        if (tomorrow && typeof tomorrow.score === "number") {
+          const s = tomorrow.score;
+          if (s >= 70)      markerColor = "#22c55e";
           else if (s >= 40) markerColor = "#eab308";
-          else markerColor = "#ef4444";
+          else              markerColor = "#ef4444";
         }
 
         let predHtml = "Prediction (next 3 days):<br/><div class='popup-pred-lines'>";
