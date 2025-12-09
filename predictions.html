@@ -75,7 +75,6 @@
             Fetching data…
           </p>
         </div>
-        <!-- CHANGED TEXT HERE -->
         <button class="secondary-btn" id="backToSpotBtn">
           ← Back to main
         </button>
@@ -86,6 +85,15 @@
       <h2>Next 3 days</h2>
       <div id="predictionsList"></div>
       <p class="pred-info" id="predSummary"></p>
+    </div>
+
+    <!-- NEW: Hot times tomorrow -->
+    <div class="card" id="hotTimesCard" style="display:none;">
+      <h2>Hot times tomorrow</h2>
+      <div id="hotTimesList"></div>
+      <p class="pred-info" id="hotTimesNote">
+        Based on your catches with weather data and tomorrow's hourly forecast at this spot.
+      </p>
     </div>
 
     <div class="card" id="debugCard" style="display:none;">
@@ -134,6 +142,10 @@
     const predictionsList = document.getElementById("predictionsList");
     const predSummary     = document.getElementById("predSummary");
 
+    const hotTimesCard = document.getElementById("hotTimesCard");
+    const hotTimesList = document.getElementById("hotTimesList");
+    const hotTimesNote = document.getElementById("hotTimesNote");
+
     const debugCard       = document.getElementById("debugCard");
     const debugInfo       = document.getElementById("debugInfo");
     const weatherNowInfo  = document.getElementById("weatherNowInfo");
@@ -171,6 +183,7 @@
       return { icon: "❓", label: "Unknown" };
     }
 
+    // Approximate moon phase (0..1)
     function getApproxMoonPhase(date) {
       const lp = 2551443;
       const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
@@ -230,6 +243,7 @@
     async function computeSpotWeatherAndPredictions(lat, lng, spotCatches) {
       let weatherNowText = "Weather: failed to load";
       const predictions = [];
+      let hotHoursTomorrow = [];
 
       const url =
         `https://api.open-meteo.com/v1/forecast` +
@@ -244,6 +258,7 @@
       if (!res.ok) throw new Error("Open-Meteo HTTP " + res.status);
       const data = await res.json();
 
+      // ---- Current weather ----
       const cur = data.current || {};
       const tempNow =
         typeof cur.temperature_2m === "number" ? cur.temperature_2m : null;
@@ -260,6 +275,7 @@
         ? `Weather now: ${icon} ${wParts.join(", ")}`
         : "Weather now: not available";
 
+      // ---- Hourly forecast ----
       const hourly = data.hourly || {};
       const times   = hourly.time || [];
       const temps   = hourly.temperature_2m || [];
@@ -267,7 +283,7 @@
       const presses = hourly.pressure_msl || [];
 
       if (!times.length || !temps.length || !windsMs.length || !presses.length) {
-        return { weatherNowText, predictions };
+        return { weatherNowText, predictions, hotHoursTomorrow };
       }
 
       function getForecastForDayOffset(dayOffset) {
@@ -290,6 +306,7 @@
         return { dateObj: base, temp: fTemp, windMs: fWind, press: fPress, moon: fMoon };
       }
 
+      // Daily predictions for next 3 days
       for (let offset = 1; offset <= 3; offset++) {
         const fc = getForecastForDayOffset(offset);
         if (!fc) {
@@ -318,7 +335,49 @@
         });
       }
 
-      return { weatherNowText, predictions };
+      // ---- Hot times tomorrow (hourly) ----
+      function getHotHoursForDayOffset(dayOffset) {
+        const base = new Date();
+        base.setDate(base.getDate() + dayOffset);
+        const yyyy = base.getFullYear();
+        const mm = String(base.getMonth() + 1).padStart(2, "0");
+        const dd = String(base.getDate()).padStart(2, "0");
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        const results = [];
+
+        for (let i = 0; i < times.length; i++) {
+          if (!times[i].startsWith(dateStr)) continue;
+
+          const dt = new Date(times[i]);
+          const fTemp  = temps[i];
+          const fWind  = windsMs[i];
+          const fPress = presses[i];
+          const fMoon  = getApproxMoonPhase(dt);
+
+          const score = computePredictionScoreForDay(
+            spotCatches,
+            fTemp,
+            fWind,
+            fPress,
+            fMoon
+          );
+          if (score == null) continue;
+
+          results.push({ dateObj: dt, score });
+        }
+
+        results.sort((a, b) => b.score - a.score);
+        const top = results.slice(0, 5).map(r => ({
+          label: r.dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          score: r.score
+        }));
+        return top;
+      }
+
+      hotHoursTomorrow = getHotHoursForDayOffset(1);
+
+      return { weatherNowText, predictions, hotHoursTomorrow };
     }
 
     onAuthStateChanged(auth, async (user) => {
@@ -370,6 +429,7 @@
       if (typeof currentSpot.latitude !== "number" ||
           typeof currentSpot.longitude !== "number") {
         predictionsCard.style.display = "none";
+        hotTimesCard.style.display    = "none";
         debugCard.style.display       = "block";
         debugInfo.textContent         =
           "This spot has no GPS coordinates, so forecast-based prediction is not available.";
@@ -377,7 +437,7 @@
       }
 
       try {
-        const { weatherNowText, predictions } =
+        const { weatherNowText, predictions, hotHoursTomorrow } =
           await computeSpotWeatherAndPredictions(
             currentSpot.latitude,
             currentSpot.longitude,
@@ -389,9 +449,11 @@
 
         weatherNowInfo.textContent = weatherNowText;
         renderPredictions(predictions, withWeather.length);
+        renderHotHours(hotHoursTomorrow);
       } catch (err) {
         console.error(err);
         predictionsCard.style.display = "none";
+        hotTimesCard.style.display    = "none";
         debugCard.style.display       = "block";
         debugInfo.textContent         = "Failed to compute predictions.";
       }
@@ -464,7 +526,34 @@
       }
     }
 
-    // CHANGED: always go to main page
+    // NEW: render "Hot times tomorrow"
+    function renderHotHours(hotHours) {
+      if (!hotHours || !hotHours.length) {
+        hotTimesCard.style.display = "none";
+        return;
+      }
+      hotTimesCard.style.display = "block";
+      hotTimesList.innerHTML = "";
+
+      hotHours.forEach(h => {
+        const row = document.createElement("div");
+        row.className = "pred-row";
+
+        const left = document.createElement("div");
+        left.className = "pred-label";
+        left.textContent = h.label;
+
+        const right = document.createElement("div");
+        right.className = "pred-score";
+        right.textContent = `${h.score.toFixed(0)}%`;
+
+        row.appendChild(left);
+        row.appendChild(right);
+        hotTimesList.appendChild(row);
+      });
+    }
+
+    // Always go back to main page
     backToSpotBtn.onclick = () => {
       window.location.href = "index.html";
     };
