@@ -7,7 +7,8 @@
 
   <link rel="preconnect" href="https://www.gstatic.com">
   <link rel="preconnect" href="https://www.googleapis.com">
-  <link rel="stylesheet" href="style.css">
+
+  <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
@@ -22,15 +23,15 @@
       <div class="loading-spinner"></div>
     </div>
 
-    <!-- AUTH -->
+    <!-- AUTH CARD (email/password only) -->
     <div class="card" id="authCard" style="display:none;">
       <h2>Log in or sign up</h2>
 
-      <label>Email</label>
-      <input id="authEmail" type="email">
+      <label for="authEmail">Email</label>
+      <input id="authEmail" type="email" autocomplete="email" />
 
-      <label>Password</label>
-      <input id="authPassword" type="password">
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" autocomplete="current-password" />
 
       <div class="auth-buttons">
         <button id="loginBtn">Log in</button>
@@ -82,7 +83,10 @@
       <div class="card">
         <div class="spots-header-row">
           <h2>My fishing spots</h2>
-          <button id="goAddSpotBtn" class="tiny-secondary-btn">Add new spot</button>
+          <div class="spots-header-actions">
+            <button id="goMapViewBtn" class="tiny-secondary-btn">Map view</button>
+            <button id="goAddSpotBtn" class="tiny-secondary-btn">Add new spot</button>
+          </div>
         </div>
 
         <div id="spotsContainer" class="spots-container"></div>
@@ -96,7 +100,8 @@
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
 
     import {
-      getAuth, onAuthStateChanged,
+      getAuth,
+      onAuthStateChanged,
       signInWithEmailAndPassword,
       createUserWithEmailAndPassword,
       signOut
@@ -109,109 +114,128 @@
       doc, getDoc, setDoc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /* FIREBASE CONFIG */
+    /* FIREBASE CONFIG (your project) */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
       projectId: "fishing-log-app-murx",
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1656807867882",
-      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
     };
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    /* REFERENCES */
-    const loadingCard = document.getElementById("loadingCard");
-    const authCard    = document.getElementById("authCard");
-    const userCard    = document.getElementById("userCard");
-    const appContent  = document.getElementById("appContent");
-    const displayNameEl = document.getElementById("userDisplayName");
+    /* DOM REFS */
+    const loadingCard      = document.getElementById("loadingCard");
+    const authCard         = document.getElementById("authCard");
+    const userCard         = document.getElementById("userCard");
+    const appContent       = document.getElementById("appContent");
+    const displayNameEl    = document.getElementById("userDisplayName");
 
-    const emailEl = document.getElementById("authEmail");
-    const passEl  = document.getElementById("authPassword");
-    const msgEl   = document.getElementById("authMessage");
+    const emailEl          = document.getElementById("authEmail");
+    const passEl           = document.getElementById("authPassword");
+    const authMsgEl        = document.getElementById("authMessage");
 
-    const settingsCard   = document.getElementById("settingsCard");
-    const settingsBtn    = document.getElementById("settingsBtn");
-    const saveSettingsBtn   = document.getElementById("saveSettingsBtn");
-    const cancelSettingsBtn = document.getElementById("cancelSettingsBtn");
-    const displayNameInput  = document.getElementById("displayNameInput");
-    const settingsMessage   = document.getElementById("settingsMessage");
+    const settingsCard     = document.getElementById("settingsCard");
+    const settingsBtn      = document.getElementById("settingsBtn");
+    const saveSettingsBtn  = document.getElementById("saveSettingsBtn");
+    const cancelSettingsBtn= document.getElementById("cancelSettingsBtn");
+    const displayNameInput = document.getElementById("displayNameInput");
+    const settingsMessage  = document.getElementById("settingsMessage");
+
+    const goAddSpotBtn     = document.getElementById("goAddSpotBtn");
+    const goMapViewBtn     = document.getElementById("goMapViewBtn");
 
     let currentUser = null;
     let catches = [];
-    let spots = [];
+    let spots   = [];
     let currentUserEmail = "";
 
-    /* AUTH BUTTONS */
+    /* ---------------- AUTH BUTTONS ---------------- */
+
     document.getElementById("loginBtn").onclick = async () => {
+      authMsgEl.textContent = "";
       try {
         await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
       } catch (err) {
-        msgEl.textContent = err.message;
+        authMsgEl.textContent = err.message;
       }
     };
 
     document.getElementById("signupBtn").onclick = async () => {
+      authMsgEl.textContent = "";
       try {
         await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
       } catch (err) {
-        msgEl.textContent = err.message;
+        authMsgEl.textContent = err.message;
       }
     };
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
 
-    document.getElementById("goAddSpotBtn").onclick = () =>
-      window.location.href = "add-spot.html";
+    goAddSpotBtn.onclick = () => window.location.href = "add-spot.html";
+    goMapViewBtn.onclick = () => window.location.href = "spots-map.html";
 
-    /* SETTINGS */
-    settingsBtn.onclick = async () => {
+    /* ---------------- SETTINGS ---------------- */
+
+    settingsBtn.onclick = () => {
+      if (!currentUser) return;
       settingsMessage.textContent = "";
       settingsCard.style.display = "block";
-      displayNameInput.value = displayNameEl.textContent || currentUserEmail;
+      displayNameInput.value = displayNameEl.textContent || currentUserEmail || "";
     };
 
     cancelSettingsBtn.onclick = () => {
       settingsCard.style.display = "none";
+      settingsMessage.textContent = "";
     };
 
     saveSettingsBtn.onclick = async () => {
+      if (!currentUser) return;
       const name = displayNameInput.value.trim();
       if (!name) {
-        settingsMessage.textContent = "Please enter a name.";
+        settingsMessage.textContent = "Please enter a display name.";
         return;
       }
 
       try {
-        await setDoc(doc(db, "users", currentUser.uid), { displayName: name }, { merge: true });
+        const userDocRef = doc(db, "users", currentUser.uid);
+        await setDoc(userDocRef, { displayName: name }, { merge: true });
         displayNameEl.textContent = name;
         settingsMessage.textContent = "Saved!";
-        setTimeout(() => settingsCard.style.display = "none", 500);
-      } catch {
-        settingsMessage.textContent = "Error saving settings.";
+        setTimeout(() => {
+          settingsCard.style.display = "none";
+          settingsMessage.textContent = "";
+        }, 600);
+      } catch (err) {
+        console.error(err);
+        settingsMessage.textContent = "Failed to save settings.";
       }
     };
 
-    /* LOAD DISPLAY NAME */
     async function loadUserProfile(user) {
-      currentUserEmail = user.email;
+      currentUserEmail = user.email || "";
+      let displayName = "";
+
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists() && snap.data().displayName) {
-          displayNameEl.textContent = snap.data().displayName;
-        } else {
-          displayNameEl.textContent = currentUserEmail;
+        const userDocRef = doc(db, "users", user.uid);
+        const snap = await getDoc(userDocRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.displayName) displayName = data.displayName;
         }
-      } catch {
-        displayNameEl.textContent = currentUserEmail;
+      } catch (err) {
+        console.error("Error loading user profile:", err);
       }
+
+      displayNameEl.textContent = displayName || currentUserEmail;
     }
 
-    /* AUTH STATE */
+    /* ---------------- AUTH STATE ---------------- */
+
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
       loadingCard.style.display = "none";
@@ -231,10 +255,12 @@
         authCard.style.display   = "block";
         userCard.style.display   = "none";
         appContent.style.display = "none";
+        settingsCard.style.display = "none";
       }
     });
 
-    /* LOAD DATA */
+    /* ---------------- DATA LOAD ---------------- */
+
     async function loadCatches() {
       const q = query(collection(db, "catches"), where("userId", "==", currentUser.uid));
       const snap = await getDocs(q);
@@ -247,9 +273,11 @@
       spots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 
-    /* STATS LOADING SPINNER */
+    /* ---------------- STATS ---------------- */
+
     function showStatsLoading() {
       const statsEl = document.getElementById("stats");
+      if (!statsEl) return;
       statsEl.innerHTML = `
         <div class="loading-spinner-wrapper section-loading">
           <div class="loading-spinner"></div>
@@ -257,7 +285,6 @@
       `;
     }
 
-    /* RENDER STATS */
     function renderStats() {
       const statsEl = document.getElementById("stats");
       statsEl.innerHTML = "";
@@ -281,13 +308,15 @@
 
       const container = document.createElement("div");
 
-      function pill(label, value) {
+      const pill = (label, value) => {
         const div = document.createElement("div");
         div.className = "stat-pill";
-        div.innerHTML = `<span class="stat-label">${label}</span>
-                         <span class="stat-value">${value}</span>`;
+        div.innerHTML = `
+          <span class="stat-label">${label}</span>
+          <span class="stat-value">${value}</span>
+        `;
         container.appendChild(div);
-      }
+      };
 
       pill("Total catches", total);
       pill("Biggest fish", `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`);
@@ -296,7 +325,8 @@
       statsEl.appendChild(container);
     }
 
-    /* WEATHER CODE → ICON + TEXT */
+    /* ---------------- WEATHER HELPER ---------------- */
+
     function getWeatherIconAndLabel(code) {
       if (code === 0) return { icon: "☀️", label: "Clear sky" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
@@ -313,7 +343,6 @@
       return { icon: "❓", label: "Unknown weather" };
     }
 
-    /* WEATHER */
     async function fetchWeatherForSpot(lat, lng, el) {
       try {
         el.textContent = "Weather: loading…";
@@ -324,11 +353,13 @@
           `&current_weather=true`;
 
         const res = await fetch(url);
+        if (!res.ok) throw new Error("Open-Meteo error");
+
         const data = await res.json();
         const cw = data.current_weather || {};
 
-        const temp    = cw.temperature;
-        const windKmh = cw.windspeed;
+        const temp    = typeof cw.temperature === "number" ? cw.temperature : null;
+        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
         const windMs  = windKmh != null ? windKmh / 3.6 : null;
         const code    = cw.weathercode;
 
@@ -339,15 +370,19 @@
         if (temp != null)   parts.push(`${temp.toFixed(1)} °C`);
         if (windMs != null) parts.push(`wind ${windMs.toFixed(1)} m/s`);
 
-        el.textContent = parts.length
-          ? `Weather now: ${icon} ${parts.join(", ")}`
-          : "Weather unavailable";
-      } catch {
-        el.textContent = "Weather: error";
+        const text = parts.join(", ");
+
+        el.textContent = text
+          ? `Weather now: ${icon} ${text}`
+          : "Weather: not available";
+      } catch (err) {
+        console.error(err);
+        el.textContent = "Weather: failed to load";
       }
     }
 
-    /* RENDER SPOTS WITH CATCH STATS RESTORED */
+    /* ---------------- SPOTS ---------------- */
+
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
       spotsEl.innerHTML = "";
@@ -358,10 +393,9 @@
       }
 
       spots
+        .slice()
         .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
         .forEach(spot => {
-
-          /* compute catches stats */
           const spotCatches = catches.filter(c => c.spotId === spot.id);
 
           let statsLine = "No catches yet";
@@ -403,7 +437,6 @@
             </div>
 
             <div class="spot-stats">${statsLine}</div>
-
             <div class="spot-weather"></div>
 
             <div class="spot-actions-row" style="margin-top:4px;">
@@ -411,7 +444,6 @@
                  href="predictions.html?spotId=${encodeURIComponent(spot.id)}">
                  Predictions (next 3 days)
               </a>
-
               ${
                 hasCoords
                   ? `<a class="tiny-secondary-btn"
@@ -424,8 +456,11 @@
           `;
 
           const weatherEl = block.querySelector(".spot-weather");
-          if (hasCoords) fetchWeatherForSpot(spot.latitude, spot.longitude, weatherEl);
-          else weatherEl.textContent = "Weather: no GPS";
+          if (hasCoords) {
+            fetchWeatherForSpot(spot.latitude, spot.longitude, weatherEl);
+          } else {
+            weatherEl.textContent = "Weather: no GPS for this spot";
+          }
 
           spotsEl.appendChild(block);
         });
