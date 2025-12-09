@@ -17,7 +17,7 @@
       <p>Track your catches anywhere – with login & cloud sync.</p>
     </header>
 
-    <!-- LOADING -->
+    <!-- GLOBAL LOADING -->
     <div id="loadingCard" class="loading-spinner-wrapper">
       <div class="loading-spinner"></div>
     </div>
@@ -40,15 +40,33 @@
       <p id="authMessage" class="auth-message"></p>
     </div>
 
-    <!-- USER CARD -->
+    <!-- USER CARD + SETTINGS BUTTON -->
     <div class="card" id="userCard" style="display:none;">
       <div class="user-row">
         <div>
           <div class="user-label">Logged in as</div>
-          <div class="user-email" id="userEmail"></div>
+          <div class="user-email" id="userDisplayName"></div>
         </div>
-        <button id="logoutBtn" class="secondary-btn">Log out</button>
+        <div class="user-actions">
+          <button id="settingsBtn" class="secondary-btn">Settings</button>
+          <button id="logoutBtn" class="secondary-btn">Log out</button>
+        </div>
       </div>
+    </div>
+
+    <!-- SETTINGS CARD -->
+    <div class="card" id="settingsCard" style="display:none;">
+      <h2>Settings</h2>
+
+      <label for="displayNameInput">Display name</label>
+      <input id="displayNameInput" type="text" placeholder="Your name" />
+
+      <div class="auth-buttons">
+        <button id="saveSettingsBtn">Save</button>
+        <button id="cancelSettingsBtn" class="secondary-btn">Cancel</button>
+      </div>
+
+      <p id="settingsMessage" class="auth-message"></p>
     </div>
 
     <!-- MAIN CONTENT -->
@@ -57,9 +75,7 @@
       <!-- GLOBAL STATS -->
       <div class="card">
         <h2>Stats</h2>
-        <div id="stats" class="stats-container">
-          <!-- filled dynamically -->
-        </div>
+        <div id="stats" class="stats-container"></div>
       </div>
 
       <!-- FISHING SPOTS -->
@@ -87,8 +103,10 @@
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     import {
-      getFirestore, collection, getDocs,
-      query, where
+      getFirestore,
+      collection, getDocs,
+      query, where,
+      doc, getDoc, setDoc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
     /* FIREBASE CONFIG */
@@ -101,35 +119,48 @@
       appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
     };
 
-    /* INIT */
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    /* UI ELEMENTS */
+    /* REFERENCES */
     const loadingCard = document.getElementById("loadingCard");
     const authCard    = document.getElementById("authCard");
     const userCard    = document.getElementById("userCard");
     const appContent  = document.getElementById("appContent");
-    const userEmailEl = document.getElementById("userEmail");
+    const displayNameEl = document.getElementById("userDisplayName");
 
     const emailEl = document.getElementById("authEmail");
     const passEl  = document.getElementById("authPassword");
     const msgEl   = document.getElementById("authMessage");
 
+    const settingsCard   = document.getElementById("settingsCard");
+    const settingsBtn    = document.getElementById("settingsBtn");
+    const saveSettingsBtn   = document.getElementById("saveSettingsBtn");
+    const cancelSettingsBtn = document.getElementById("cancelSettingsBtn");
+    const displayNameInput  = document.getElementById("displayNameInput");
+    const settingsMessage   = document.getElementById("settingsMessage");
+
     let currentUser = null;
     let catches = [];
     let spots = [];
+    let currentUserEmail = "";
 
     /* AUTH BUTTONS */
     document.getElementById("loginBtn").onclick = async () => {
-      try { await signInWithEmailAndPassword(auth, emailEl.value, passEl.value); }
-      catch (err) { msgEl.textContent = err.message; }
+      try {
+        await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
+      } catch (err) {
+        msgEl.textContent = err.message;
+      }
     };
 
     document.getElementById("signupBtn").onclick = async () => {
-      try { await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value); }
-      catch (err) { msgEl.textContent = err.message; }
+      try {
+        await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
+      } catch (err) {
+        msgEl.textContent = err.message;
+      }
     };
 
     document.getElementById("logoutBtn").onclick = () => signOut(auth);
@@ -137,7 +168,50 @@
     document.getElementById("goAddSpotBtn").onclick = () =>
       window.location.href = "add-spot.html";
 
-    /* AUTH STATE HANDLING */
+    /* SETTINGS */
+    settingsBtn.onclick = async () => {
+      settingsMessage.textContent = "";
+      settingsCard.style.display = "block";
+      displayNameInput.value = displayNameEl.textContent || currentUserEmail;
+    };
+
+    cancelSettingsBtn.onclick = () => {
+      settingsCard.style.display = "none";
+    };
+
+    saveSettingsBtn.onclick = async () => {
+      const name = displayNameInput.value.trim();
+      if (!name) {
+        settingsMessage.textContent = "Please enter a name.";
+        return;
+      }
+
+      try {
+        await setDoc(doc(db, "users", currentUser.uid), { displayName: name }, { merge: true });
+        displayNameEl.textContent = name;
+        settingsMessage.textContent = "Saved!";
+        setTimeout(() => settingsCard.style.display = "none", 500);
+      } catch {
+        settingsMessage.textContent = "Error saving settings.";
+      }
+    };
+
+    /* LOAD DISPLAY NAME */
+    async function loadUserProfile(user) {
+      currentUserEmail = user.email;
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists() && snap.data().displayName) {
+          displayNameEl.textContent = snap.data().displayName;
+        } else {
+          displayNameEl.textContent = currentUserEmail;
+        }
+      } catch {
+        displayNameEl.textContent = currentUserEmail;
+      }
+    }
+
+    /* AUTH STATE */
     onAuthStateChanged(auth, async (user) => {
       currentUser = user;
       loadingCard.style.display = "none";
@@ -146,11 +220,10 @@
         authCard.style.display   = "none";
         userCard.style.display   = "block";
         appContent.style.display = "block";
-        userEmailEl.textContent  = user.email;
 
-        // show spinner while stats/catches load
+        await loadUserProfile(user);
+
         showStatsLoading();
-
         await Promise.all([loadCatches(), loadSpots()]);
         renderStats();
         renderSpots();
@@ -174,10 +247,9 @@
       spots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
 
-    /* Show stats loading spinner */
+    /* STATS LOADING SPINNER */
     function showStatsLoading() {
       const statsEl = document.getElementById("stats");
-      if (!statsEl) return;
       statsEl.innerHTML = `
         <div class="loading-spinner-wrapper section-loading">
           <div class="loading-spinner"></div>
@@ -185,7 +257,7 @@
       `;
     }
 
-    /* RENDER GLOBAL STATS */
+    /* RENDER STATS */
     function renderStats() {
       const statsEl = document.getElementById("stats");
       statsEl.innerHTML = "";
@@ -224,7 +296,7 @@
       statsEl.appendChild(container);
     }
 
-    // 🔎 Map Open-Meteo weather codes to icon + label
+    /* WEATHER CODE → ICON + TEXT */
     function getWeatherIconAndLabel(code) {
       if (code === 0) return { icon: "☀️", label: "Clear sky" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
@@ -241,7 +313,7 @@
       return { icon: "❓", label: "Unknown weather" };
     }
 
-    /* WEATHER HELPER FOR SPOTS: current weather (Open-Meteo, km/h → m/s) */
+    /* WEATHER */
     async function fetchWeatherForSpot(lat, lng, el) {
       try {
         el.textContent = "Weather: loading…";
@@ -252,13 +324,11 @@
           `&current_weather=true`;
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error("Open-Meteo error");
-
         const data = await res.json();
         const cw = data.current_weather || {};
 
-        const temp    = typeof cw.temperature === "number" ? cw.temperature : null;
-        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
+        const temp    = cw.temperature;
+        const windKmh = cw.windspeed;
         const windMs  = windKmh != null ? windKmh / 3.6 : null;
         const code    = cw.weathercode;
 
@@ -269,18 +339,15 @@
         if (temp != null)   parts.push(`${temp.toFixed(1)} °C`);
         if (windMs != null) parts.push(`wind ${windMs.toFixed(1)} m/s`);
 
-        const text = parts.join(", ");
-
-        el.textContent = text
-          ? `Weather now: ${icon} ${text}`
-          : "Weather: not available";
-      } catch (err) {
-        console.error(err);
-        el.textContent = "Weather: failed to load";
+        el.textContent = parts.length
+          ? `Weather now: ${icon} ${parts.join(", ")}`
+          : "Weather unavailable";
+      } catch {
+        el.textContent = "Weather: error";
       }
     }
 
-    /* RENDER SPOTS (with compact prediction badge under weather) */
+    /* RENDER SPOTS WITH CATCH STATS RESTORED */
     function renderSpots() {
       const spotsEl = document.getElementById("spotsContainer");
       spotsEl.innerHTML = "";
@@ -291,22 +358,24 @@
       }
 
       spots
-        .slice()
         .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
         .forEach(spot => {
 
+          /* compute catches stats */
           const spotCatches = catches.filter(c => c.spotId === spot.id);
-          const total = spotCatches.length;
 
-          let biggest = null;
-          spotCatches.forEach(c => {
-            const w = Number(c.weightKg) || 0;
-            if (!biggest || w > Number(biggest.weightKg || 0)) biggest = c;
-          });
-
-          const statsLine = total
-            ? `Total catches: ${total} • Biggest: ${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`
-            : "No catches yet at this spot";
+          let statsLine = "No catches yet";
+          if (spotCatches.length) {
+            let biggest = spotCatches[0];
+            spotCatches.forEach(c => {
+              if (Number(c.weightKg) > Number(biggest.weightKg)) {
+                biggest = c;
+              }
+            });
+            statsLine =
+              `Total catches: ${spotCatches.length} • ` +
+              `Biggest: ${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`;
+          }
 
           const hasCoords =
             typeof spot.latitude === "number" &&
@@ -322,50 +391,41 @@
           block.innerHTML = `
             <div class="spot-header">
               <div class="spot-name-buttons">
-                <!-- Spot name -->
                 <a class="tiny-secondary-btn"
                    href="spot.html?id=${encodeURIComponent(spot.id)}">
-                   ${spot.name || "Unnamed spot"}
+                   ${spot.name}
                 </a>
-
-                <!-- Google Maps -->
-                ${
-                  hasCoords
-                    ? `<a class="tiny-secondary-btn" href="${mapsLink}" target="_blank">
-                         Google Maps
-                       </a>`
-                    : ""
-                }
-
-                <!-- Add catch for this spot -->
                 <a class="tiny-secondary-btn"
                    href="add-catch.html?spotId=${encodeURIComponent(spot.id)}">
                    Add catch
                 </a>
               </div>
-
-              <div class="spot-count">${total} catches</div>
             </div>
 
             <div class="spot-stats">${statsLine}</div>
+
             <div class="spot-weather"></div>
-            <!-- Compact prediction badge under weather -->
-            <a
-              class="tiny-secondary-btn"
-              style="margin-top:4px; display:inline-block;"
-              href="predictions.html?spotId=${encodeURIComponent(spot.id)}"
-            >
-              Predictions (next 3 days)
-            </a>
+
+            <div class="spot-actions-row" style="margin-top:4px;">
+              <a class="tiny-secondary-btn"
+                 href="predictions.html?spotId=${encodeURIComponent(spot.id)}">
+                 Predictions (next 3 days)
+              </a>
+
+              ${
+                hasCoords
+                  ? `<a class="tiny-secondary-btn"
+                       href="${mapsLink}" target="_blank">
+                       Google Maps
+                     </a>`
+                  : ""
+              }
+            </div>
           `;
 
           const weatherEl = block.querySelector(".spot-weather");
-
-          if (hasCoords) {
-            fetchWeatherForSpot(spot.latitude, spot.longitude, weatherEl);
-          } else {
-            weatherEl.textContent = "Weather: no GPS for this spot";
-          }
+          if (hasCoords) fetchWeatherForSpot(spot.latitude, spot.longitude, weatherEl);
+          else weatherEl.textContent = "Weather: no GPS";
 
           spotsEl.appendChild(block);
         });
