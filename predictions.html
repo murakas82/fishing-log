@@ -75,8 +75,9 @@
             Fetching data…
           </p>
         </div>
+        <!-- CHANGED TEXT HERE -->
         <button class="secondary-btn" id="backToSpotBtn">
-          ← Back
+          ← Back to main
         </button>
       </div>
     </div>
@@ -463,13 +464,9 @@
       }
     }
 
+    // CHANGED: always go to main page
     backToSpotBtn.onclick = () => {
-      if (currentSpotId) {
-        window.location.href =
-          `spot.html?id=${encodeURIComponent(currentSpotId)}`;
-      } else {
-        window.location.href = "index.html";
-      }
+      window.location.href = "index.html";
     };
   </script>
 </body>
