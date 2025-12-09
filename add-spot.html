@@ -7,12 +7,16 @@
 
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Leaflet CSS (OpenStreetMap) -->
+  <!-- Leaflet CSS -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
+  />
+
+  <!-- Leaflet Geocoder CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css"
   />
 
   <style>
@@ -21,14 +25,9 @@
       margin-top: 8px;
       font-size: 0.9rem;
     }
-    .helper-text {
-      margin-top: 8px;
-      font-size: 0.85rem;
-      opacity: 0.85;
-    }
     #map {
       margin-top: 8px;
-      height: 260px;
+      height: 300px;
       border-radius: 16px;
       overflow: hidden;
     }
@@ -46,9 +45,8 @@
       <label>Spot name</label>
       <input id="spotName" type="text" placeholder="Enter spot name" />
 
-      <p class="helper-text">
-        Tap on the map to choose the fishing spot location. Latitude and longitude
-        will be filled in automatically.
+      <p style="opacity:0.8;font-size:0.9rem;margin-top:8px;">
+        You can search for a place or click on the map to select coordinates.
       </p>
 
       <div id="map"></div>
@@ -64,12 +62,13 @@
     </div>
   </div>
 
-  <!-- Leaflet JS (OpenStreetMap) -->
+  <!-- Leaflet JS -->
   <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+  </script>
+
+  <!-- Leaflet Geocoder JS -->
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 
   <script type="module">
     import { initializeApp }
@@ -114,29 +113,46 @@
       currentUser = user;
     });
 
-    /* ------- AUTO-CAPITALIZE FIRST LETTER OF SPOT NAME ------- */
+    /* ---------- AUTO-CAPITALIZE SPOT NAME ---------- */
     spotNameEl.addEventListener("input", () => {
       let val = spotNameEl.value;
       if (!val) return;
       spotNameEl.value = val.charAt(0).toUpperCase() + val.slice(1);
     });
 
-    /* ------- LEAFLET MAP SETUP ------- */
+    /* ---------- LEAFLET MAP + SEARCH ---------- */
 
-    // Default center (roughly Estonia-ish so it's near your usual spots)
-    const initialLat = 59.0;
-    const initialLng = 25.0;
-    const map = L.map("map").setView([initialLat, initialLng], 8);
+    const map = L.map("map").setView([59.0, 25.0], 8);
 
-    // OpenStreetMap tiles (free)
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 18,
-      attribution: '&copy; OpenStreetMap contributors'
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
 
     let marker = null;
 
-    // When user clicks on the map, set / move marker + fill coords
+    // Add search bar (Leaflet Control Geocoder)
+    L.Control.geocoder({
+      defaultMarkGeocode: false,
+      placeholder: "Search location…",
+    })
+    .on("markgeocode", function(e) {
+      const center = e.geocode.center;
+
+      map.setView(center, 13);
+
+      if (!marker) {
+        marker = L.marker(center).addTo(map);
+      } else {
+        marker.setLatLng(center);
+      }
+
+      latEl.value = center.lat.toFixed(6);
+      lngEl.value = center.lng.toFixed(6);
+    })
+    .addTo(map);
+
+    // Click-to-place marker
     map.on("click", (e) => {
       const { lat, lng } = e.latlng;
 
@@ -150,7 +166,7 @@
       lngEl.value = lng.toFixed(6);
     });
 
-    /* ------- SAVE SPOT WITH DUPLICATE NAME CHECK ------- */
+    /* ---------- SAVE SPOT WITH DUPLICATE PREVENTION ---------- */
     saveBtn.onclick = async () => {
       msgEl.textContent = "";
 
@@ -163,39 +179,36 @@
         return;
       }
 
-      // Capitalize first letter again (safety)
       name = name.charAt(0).toUpperCase() + name.slice(1);
 
       if (isNaN(lat) || isNaN(lng)) {
-        msgEl.textContent = "Latitude and Longitude are required (pick from map).";
+        msgEl.textContent = "Please select a location from the map.";
         return;
       }
 
       try {
-        // Check duplicates (case-insensitive) for this user
+        // Check for duplicates
         const q = query(
           collection(db, "spots"),
           where("userId", "==", currentUser.uid)
         );
         const snap = await getDocs(q);
-        const existingNames = snap.docs.map(d => {
-          const data = d.data();
-          return (data.name || "").toLowerCase();
-        });
+        const names = snap.docs.map(d => (d.data().name || "").toLowerCase());
 
-        if (existingNames.includes(name.toLowerCase())) {
-          msgEl.textContent = "Spot name already exists. Choose another.";
+        if (names.includes(name.toLowerCase())) {
+          msgEl.textContent = "Spot name already exists.";
           return;
         }
 
         await addDoc(collection(db, "spots"), {
           userId: currentUser.uid,
-          name: name,
+          name,
           latitude: lat,
           longitude: lng
         });
 
         window.location.href = "index.html";
+
       } catch (err) {
         console.error(err);
         msgEl.textContent = "Error saving spot.";
