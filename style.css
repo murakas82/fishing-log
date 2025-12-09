@@ -1,287 +1,331 @@
 /* Base layout */
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  padding: 0;
-  background: #061018;
-  color: #ffffff;
-  font-family: Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #1f2937 0, #030712 55%, #000 100%);
+  color: #e5e7eb;
+  min-height: 100vh;
 }
 
 .app {
-  max-width: 600px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px 16px 40px;
 }
 
+/* Fade-in */
 .fade-in {
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.25s ease-out;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);  }
 }
 
-/************ HEADER **************/
+/* Header */
 header {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 header h1 {
-  margin: 0 0 4px 0;
+  margin: 0 0 4px;
+  font-size: 1.7rem;
 }
 
 header p {
   margin: 0;
-  opacity: 0.7;
+  font-size: 0.95rem;
+  opacity: 0.75;
 }
 
-/************ CARDS **************/
+/* Cards */
 .card {
-  background: #0c1824;
-  padding: 16px;
-  border-radius: 10px;
+  background: rgba(17,24,39,0.92);
+  border-radius: 18px;
+  padding: 16px 16px 18px;
   margin-bottom: 14px;
-  border: 1px solid #1d3347;
+  box-shadow:
+    0 14px 30px rgba(0,0,0,0.45),
+    inset 0 0 0 1px rgba(148,163,184,0.08);
 }
 
-/************ INPUTS **************/
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 1.2rem;
+}
+
+/* Inputs */
 label {
   display: block;
-  margin-top: 12px;
+  margin-top: 8px;
   margin-bottom: 4px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   opacity: 0.85;
 }
 
-input, select, textarea {
+input {
   width: 100%;
-  padding: 10px;
-  background: #081119;
-  border: 1px solid #2a3c52;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 1rem;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148,163,184,0.4);
+  background: rgba(15,23,42,0.9);
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  outline: none;
 }
 
-textarea {
-  min-height: 80px;
-  resize: vertical;
+input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px rgba(56,189,248,0.6);
 }
 
-/************ BUTTONS **************/
+/* Buttons */
 button {
-  background: #1f8bfd;
-  color: #ffffff;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 25px;
+  font-family: inherit;
   cursor: pointer;
-  font-size: 1rem;
+  border-radius: 999px;
+  border: none;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background: linear-gradient(to right, #1d4ed8, #22c55e);
+  color: #f9fafb;
+  transition: transform 0.08s ease-out, box-shadow 0.08s ease-out, opacity 0.12s ease-out;
+  box-shadow: 0 8px 20px rgba(59,130,246,0.35);
 }
 
 button:hover {
-  background: #3ea0ff;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 25px rgba(59,130,246,0.5);
 }
 
+button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 10px rgba(15,23,42,0.9);
+}
+
+/* Secondary button */
 .secondary-btn {
-  background: transparent;
-  border: 1px solid #1f8bfd;
-  color: #1f8bfd;
-  padding: 8px 18px;
-  border-radius: 25px;
+  background: rgba(15,23,42,0.9);
+  color: #e5e7eb;
+  border: 1px solid rgba(148,163,184,0.6);
   box-shadow: none;
 }
 
 .secondary-btn:hover {
-  background: rgba(31,139,253,0.15);
+  background: rgba(30,64,175,0.9);
 }
 
-/************ SMALL PILL BUTTONS (MATCH "Add new spot") **************/
+/* Tiny pill buttons */
 .tiny-secondary-btn {
-  background: transparent;
-  border: 1px solid #1f8bfd;
-  color: #1f8bfd;
-  padding: 8px 18px;
-  border-radius: 25px;
-  font-size: 0.9rem;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  border: 1px solid rgba(148,163,184,0.7);
+  background: rgba(15,23,42,0.8);
+  color: #e5e7eb;
   text-decoration: none;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease;
 }
 
 .tiny-secondary-btn:hover {
-  background: rgba(31,139,253,0.15);
+  background: rgba(30,64,175,0.9);
 }
 
-/************ AUTH **************/
+/* Auth */
 .auth-buttons {
   display: flex;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.auth-buttons button {
+  flex: 1;
 }
 
 .auth-message {
   margin-top: 10px;
-  font-size: 0.85rem;
-  color: #ff9090;
+  font-size: 0.82rem;
+  color: #f97373;
 }
 
-/************ USER CARD **************/
+/* User row */
 .user-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-}
-
-.user-email {
-  font-weight: 600;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .user-label {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   opacity: 0.7;
 }
 
-/************ LOADING SPINNER **************/
+.user-email {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.user-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Stats */
+.stats-container {
+  margin-top: 4px;
+}
+
+.stat-pill {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(15,23,42,0.9);
+  border: 1px solid rgba(148,163,184,0.5);
+  margin-right: 8px;
+  margin-top: 6px;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.stat-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Spots */
+.spots-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* NEW: container for Map view + Add new spot buttons */
+.spots-header-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.spots-container {
+  margin-top: 8px;
+}
+
+.spot-block {
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: rgba(15,23,42,0.8);
+  border: 1px solid rgba(30,64,175,0.6);
+}
+
+.spot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.spot-name-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.spot-stats {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  opacity: 0.9;
+}
+
+.spot-weather {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+.spot-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Empty states */
+.empty-state {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+/* Loading spinner */
 .loading-spinner-wrapper {
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 40px 0;
+  padding: 24px 0;
+}
+
+.section-loading {
+  padding: 16px 0 8px;
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(255,255,255,0.15);
-  border-top-color: #1f8bfd;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  border: 3px solid rgba(148,163,184,0.35);
+  border-top-color: #38bdf8;
+  animation: spin 0.9s linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/************ STATS **************/
-.stat-pill {
-  display: inline-flex;
-  padding: 6px 12px;
-  background: #13202f;
-  border-radius: 20px;
-  margin-right: 6px;
-  margin-bottom: 6px;
-}
+/* Responsive */
+@media (max-width: 600px) {
+  .app {
+    padding: 12px 10px 32px;
+  }
 
-.stat-label {
-  opacity: 0.7;
-  margin-right: 6px;
-}
+  header h1 {
+    font-size: 1.45rem;
+  }
 
-.stat-value {
-  font-weight: 600;
-}
+  .card {
+    padding: 14px 12px 14px;
+  }
 
-/************ SPOTS LIST **************/
-.spots-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+  .spot-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
-.spots-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
+  .user-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
-.spot-block {
-  background: #081119;
-  padding: 12px;
-  border-radius: 10px;
-  border: 1px solid #2a3c52;
-}
+  .user-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 
-.spot-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.spot-name-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.spot-stats {
-  font-size: 0.8rem;
-  opacity: 0.85;
-  margin-top: 6px;
-}
-
-.spot-count {
-  opacity: 0.8;
-  font-size: 0.85rem;
-}
-
-/* Weather line under each spot */
-.spot-weather {
-  font-size: 0.8rem;
-  opacity: 0.8;
-  margin-top: 4px;
-}
-
-/************ PREDICTIONS **************/
-.predictions-container {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.prediction-item {
-  background: #081119;
-  border-radius: 10px;
-  border: 1px solid #2a3c52;
-  padding: 10px 12px;
-  font-size: 0.85rem;
-}
-
-.prediction-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.prediction-spot-name {
-  font-weight: 600;
-}
-
-.prediction-date {
-  opacity: 0.8;
-  font-size: 0.8rem;
-}
-
-.prediction-weather {
-  opacity: 0.9;
-  margin-bottom: 2px;
-}
-
-.prediction-score {
-  opacity: 0.7;
-  font-size: 0.8rem;
-}
-
-/************ EMPTY STATE **************/
-.empty-state {
-  font-size: 0.85rem;
-  opacity: 0.7;
-  text-align: center;
+  .spots-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
