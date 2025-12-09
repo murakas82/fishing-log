@@ -338,7 +338,7 @@ textarea {
   margin-top: 4px;
   border-radius: 10px;
   border: 1px solid #1f2937;
-  background-color: #020617;  /* same dark background */
+  background-color: rgba(15, 23, 42, 0.9);  /* same dark background */
   color: #e5e7eb;             /* same light text */
   font-size: 0.95rem;
   outline: none;
@@ -355,3 +355,4 @@ textarea {
   min-height: 80px;
   resize: vertical;
 }
+
