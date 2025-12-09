@@ -58,7 +58,7 @@
       <div class="card">
         <h2>Stats</h2>
         <div id="stats" class="stats-container">
-          <p class="empty-state">No stats yet – add your first catch!</p>
+          <!-- filled dynamically -->
         </div>
       </div>
 
@@ -148,6 +148,9 @@
         appContent.style.display = "block";
         userEmailEl.textContent  = user.email;
 
+        // show spinner while stats/catches load
+        showStatsLoading();
+
         await Promise.all([loadCatches(), loadSpots()]);
         renderStats();
         renderSpots();
@@ -169,6 +172,17 @@
       const q = query(collection(db, "spots"), where("userId", "==", currentUser.uid));
       const snap = await getDocs(q);
       spots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    /* Show stats loading spinner */
+    function showStatsLoading() {
+      const statsEl = document.getElementById("stats");
+      if (!statsEl) return;
+      statsEl.innerHTML = `
+        <div class="loading-spinner-wrapper section-loading">
+          <div class="loading-spinner"></div>
+        </div>
+      `;
     }
 
     /* RENDER GLOBAL STATS */
