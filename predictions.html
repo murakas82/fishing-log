@@ -87,12 +87,12 @@
       <p class="pred-info" id="predSummary"></p>
     </div>
 
-    <!-- NEW: Hot times tomorrow -->
+    <!-- Hot times tomorrow (daylight only) -->
     <div class="card" id="hotTimesCard" style="display:none;">
       <h2>Hot times tomorrow</h2>
       <div id="hotTimesList"></div>
       <p class="pred-info" id="hotTimesNote">
-        Based on your catches with weather data and tomorrow's hourly forecast at this spot.
+        Times are between 1 hour before sunrise and 1 hour after sunset, based on your catches with weather data.
       </p>
     </div>
 
@@ -144,7 +144,6 @@
 
     const hotTimesCard = document.getElementById("hotTimesCard");
     const hotTimesList = document.getElementById("hotTimesList");
-    const hotTimesNote = document.getElementById("hotTimesNote");
 
     const debugCard       = document.getElementById("debugCard");
     const debugInfo       = document.getElementById("debugInfo");
@@ -227,7 +226,7 @@
         const catchMoon =
           typeof c.moonPhase === "number" ? c.moonPhase : null;
         if (catchMoon != null && typeof forecastMoonPhase === "number") {
-          const moonDiff = Math.abs(catchMoon - forecastMoonPhase);
+          const moonDiff = Math.abs(c.moonPhase - forecastMoonPhase);
           penalty += moonDiff * 40;
         }
 
@@ -335,8 +334,8 @@
         });
       }
 
-      // ---- Hot times tomorrow (hourly) ----
-      function getHotHoursForDayOffset(dayOffset) {
+      // ---- Hot times tomorrow (hourly, daylight only) ----
+      async function getHotHoursForDayOffset(dayOffset) {
         const base = new Date();
         base.setDate(base.getDate() + dayOffset);
         const yyyy = base.getFullYear();
@@ -344,12 +343,37 @@
         const dd = String(base.getDate()).padStart(2, "0");
         const dateStr = `${yyyy}-${mm}-${dd}`;
 
+        // Sunrise / sunset for that day
+        const sunUrl =
+          `https://api.open-meteo.com/v1/forecast` +
+          `?latitude=${lat}&longitude=${lng}` +
+          `&daily=sunrise,sunset&timezone=auto` +
+          `&start_date=${dateStr}&end_date=${dateStr}`;
+
+        let sunrise, sunset;
+        try {
+          const sunRes = await fetch(sunUrl);
+          const sunData = await sunRes.json();
+          sunrise = new Date(sunData.daily.sunrise[0]);
+          sunset  = new Date(sunData.daily.sunset[0]);
+        } catch (e) {
+          console.warn("Sunrise/sunset not available:", e);
+          return [];
+        }
+
+        const allowedStart = new Date(sunrise.getTime() - 60 * 60 * 1000);
+        const allowedEnd   = new Date(sunset.getTime() + 60 * 60 * 1000);
+
         const results = [];
 
         for (let i = 0; i < times.length; i++) {
           if (!times[i].startsWith(dateStr)) continue;
 
           const dt = new Date(times[i]);
+
+          // Skip night hours
+          if (dt < allowedStart || dt > allowedEnd) continue;
+
           const fTemp  = temps[i];
           const fWind  = windsMs[i];
           const fPress = presses[i];
@@ -368,14 +392,17 @@
         }
 
         results.sort((a, b) => b.score - a.score);
-        const top = results.slice(0, 5).map(r => ({
-          label: r.dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+
+        return results.slice(0, 5).map(r => ({
+          label: r.dateObj.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+          }),
           score: r.score
         }));
-        return top;
       }
 
-      hotHoursTomorrow = getHotHoursForDayOffset(1);
+      hotHoursTomorrow = await getHotHoursForDayOffset(1);
 
       return { weatherNowText, predictions, hotHoursTomorrow };
     }
@@ -526,12 +553,12 @@
       }
     }
 
-    // NEW: render "Hot times tomorrow"
     function renderHotHours(hotHours) {
       if (!hotHours || !hotHours.length) {
         hotTimesCard.style.display = "none";
         return;
       }
+
       hotTimesCard.style.display = "block";
       hotTimesList.innerHTML = "";
 
@@ -553,7 +580,6 @@
       });
     }
 
-    // Always go back to main page
     backToSpotBtn.onclick = () => {
       window.location.href = "index.html";
     };
