@@ -2,143 +2,174 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Add Catch – My Fishing Log</title>
+  <title>Add catch</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Faster Firebase -->
-  <link rel="preconnect" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://www.googleapis.com">
-
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
   <div class="app fade-in">
-    <header>
-      <h1>Add a Catch</h1>
-      <p>Fill in the details of your catch.</p>
+    <header class="card">
+      <div class="card-header">
+        <div>
+          <h1>Add catch</h1>
+          <p class="muted-text">
+            Log a new catch with spot, weight, weather & notes.
+          </p>
+        </div>
+        <div>
+          <button class="secondary-btn btn-back-main" id="backBtn">
+            ← Back to main
+          </button>
+        </div>
+      </div>
     </header>
 
-    <!-- LOADING -->
-    <div id="loadingCard" class="loading-spinner-wrapper">
-      <div class="loading-spinner"></div>
-    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="muted-text">
+          Logged in as <span id="loggedInAs">…</span>
+        </div>
+      </div>
 
-    <!-- FORM (only if logged in) -->
-    <div class="card" id="protectedContent" style="display:none;">
-      <p style="font-size:0.9rem; margin-bottom:10px;">
-        Logged in as <span id="userEmail"></span>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="species">Species</label>
+          <input id="species" type="text" placeholder="pike, perch, etc." />
+        </div>
+
+        <div class="form-field">
+          <label for="weightKg">Weight (kg)</label>
+          <input id="weightKg" type="number" step="0.01" />
+        </div>
+
+        <div class="form-field">
+          <label for="spotSelect">Fishing spot (required)</label>
+          <select id="spotSelect"></select>
+        </div>
+
+        <div class="form-field">
+          <label for="lure">Lure</label>
+          <input id="lure" type="text" placeholder="Spinner, jig, worm…" />
+        </div>
+
+        <div class="form-field">
+          <label for="depth">Water depth (m)</label>
+          <input id="depth" type="number" step="0.1" />
+        </div>
+
+        <div class="form-field">
+          <label for="waterTemp">Water temperature (°C)</label>
+          <input id="waterTemp" type="number" step="0.1" />
+        </div>
+
+        <div class="form-field">
+          <label for="latitude">Latitude (auto from spot or GPS)</label>
+          <input id="latitude" type="number" step="0.000001" />
+        </div>
+
+        <div class="form-field">
+          <label for="longitude">Longitude (auto from spot or GPS)</label>
+          <input id="longitude" type="number" step="0.000001" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="secondary-btn" id="useLocationBtn">
+          Use my location
+        </button>
+      </div>
+
+      <p id="weatherNow" class="muted-text" style="margin-top:8px;">
+        Weather now: (not loaded yet)
       </p>
 
-      <label>Species</label>
-      <input id="species" type="text" placeholder="Pike, Trout, Perch...">
+      <div class="form-field" style="margin-top:12px;">
+        <label for="notes">Notes</label>
+        <textarea id="notes" rows="3"
+          placeholder="Weather, behavior, etc."></textarea>
+      </div>
 
-      <label>Weight (kg)</label>
-      <input id="weight" type="number" step="0.01" placeholder="2.4">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+        <button class="primary-btn" id="saveCatchBtn">Save catch</button>
+      </div>
 
-      <label>Fishing spot <span style="opacity:0.7;font-size:0.8rem;">(required)</span></label>
-      <select id="spotSelect">
-        <option value="">Select a saved spot…</option>
-      </select>
-
-      <label>Lure</label>
-      <input id="lure" type="text" placeholder="Spinner, Jig, Worm…">
-
-      <label>Water depth (m)</label>
-      <input id="depth" type="number" step="0.1" placeholder="3.5">
-
-      <label>Water temperature (°C)</label>
-      <input id="temp" type="number" step="0.1" placeholder="12.8">
-
-      <label>Latitude (auto from spot or GPS)</label>
-      <input id="lat" type="text" placeholder="Not set">
-
-      <label>Longitude (auto from spot or GPS)</label>
-      <input id="lng" type="text" placeholder="Not set">
-
-      <button id="useLocationBtn" type="button" class="secondary-btn" style="margin-bottom:10px;">
-        Use my location
-      </button>
-
-      <div id="weatherInfo" style="font-size:0.85rem; opacity:0.8; margin-bottom:8px;"></div>
-
-      <label>Notes</label>
-      <textarea id="notes" placeholder="Weather, behavior, etc."></textarea>
-
-      <button id="saveCatchBtn">Save catch</button>
-      <button id="backBtn" class="secondary-btn" style="margin-top:8px;">Back to main page</button>
-
-      <p id="formMessage" class="auth-message"></p>
-    </div>
-
-    <!-- MESSAGE IF NOT LOGGED IN -->
-    <div class="card" id="needLogin" style="display:none;">
-      <p>You need to be logged in to add a catch.</p>
-      <button id="goLoginBtn">Go to main page</button>
+      <p id="statusMsg" class="muted-text" style="margin-top:10px;"></p>
     </div>
   </div>
 
   <script type="module">
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-
     import {
-      getAuth, onAuthStateChanged
+      getAuth,
+      onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
-
     import {
       getFirestore,
       collection,
       addDoc,
       getDocs,
+      doc,
+      getDoc,
       query,
       where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // 🔧 Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
       projectId: "fishing-log-app-murx",
       storageBucket: "fishing-log-app-murx.firebasestorage.app",
-      messagingSenderId: "1656807867882",
-      appId: "1:1656807867882:web:e59ddd8f6353d190080e93"
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
     };
 
-    const app = initializeApp(firebaseConfig);
+    const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    const loadingCard      = document.getElementById("loadingCard");
-    const protectedContent = document.getElementById("protectedContent");
-    const needLogin        = document.getElementById("needLogin");
-    const userEmailEl      = document.getElementById("userEmail");
-    const msgEl            = document.getElementById("formMessage");
+    const backBtn        = document.getElementById("backBtn");
+    const loggedInAsEl   = document.getElementById("loggedInAs");
+    const speciesEl      = document.getElementById("species");
+    const weightEl       = document.getElementById("weightKg");
+    const spotSelectEl   = document.getElementById("spotSelect");
+    const lureEl         = document.getElementById("lure");
+    const depthEl        = document.getElementById("depth");
+    const waterTempEl    = document.getElementById("waterTemp");
+    const latEl          = document.getElementById("latitude");
+    const lngEl          = document.getElementById("longitude");
+    const useLocationBtn = document.getElementById("useLocationBtn");
+    const saveCatchBtn   = document.getElementById("saveCatchBtn");
+    const weatherNowEl   = document.getElementById("weatherNow");
+    const statusMsg      = document.getElementById("statusMsg");
 
-    const spotSelect       = document.getElementById("spotSelect");
-    const latInput         = document.getElementById("lat");
-    const lngInput         = document.getElementById("lng");
-    const useLocationBtn   = document.getElementById("useLocationBtn");
-    const weatherInfoEl    = document.getElementById("weatherInfo");
-    const saveCatchBtn     = document.getElementById("saveCatchBtn");
+    const params        = new URLSearchParams(window.location.search);
+    const urlSpotId     = params.get("spotId");
+    const fromParam     = params.get("from") || "main"; // "spot" or "main"
 
-    let lastWeather = null;   // { temp, windMs, label, fullText, pressure }
-    let savedSpots  = [];     // spots from Firestore
+    let currentUser = null;
+    let spots = [];
+    let latestWeather = null; // store for saving
 
-    document.getElementById("backBtn").onclick = () => {
+    backBtn.onclick = () => {
       window.location.href = "index.html";
     };
-    document.getElementById("goLoginBtn").onclick = () => {
-      window.location.href = "index.html";
-    };
 
-    // 🔎 Map Open-Meteo weather codes to icon + label
+    function getApproxMoonPhase(date) {
+      const lp = 2551443;
+      const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
+      const diff = date.getTime() - knownNewMoon;
+      const phase = (diff / 1000) % lp;
+      let frac = phase / lp;
+      if (frac < 0) frac += 1;
+      return frac;
+    }
+
     function getWeatherIconAndLabel(code) {
-      if (code === 0) return { icon: "☀️", label: "Clear sky" };
+      if (code === 0) return { icon: "☀️", label: "Clear" };
       if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
-      if (code === 2) return { icon: "⛅", label: "Partly cloudy" };
+      if (code === 2) return { icon: "⛅",  label: "Partly cloudy" };
       if (code === 3) return { icon: "☁️", label: "Overcast" };
-      if (code === 45 || code === 48) return { icon: "🌫️", label: "Fog" };
       if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Drizzle" };
       if (code >= 61 && code <= 67) return { icon: "🌧️", label: "Rain" };
       if (code >= 71 && code <= 77) return { icon: "🌨️", label: "Snow" };
@@ -146,302 +177,203 @@
       if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Snow showers" };
       if (code === 95) return { icon: "⛈️", label: "Thunderstorm" };
       if (code === 96 || code === 99) return { icon: "⛈️", label: "Thunderstorm with hail" };
-      return { icon: "❓", label: "Unknown weather" };
+      return { icon: "❓", label: "Unknown" };
     }
 
-    // helper: find nearest pressure value for current time
-    function findPressureForCurrentTime(data) {
+    async function fetchCurrentWeather(lat, lng) {
       try {
-        if (!data || !data.current_weather || !data.hourly) return null;
-        const cw = data.current_weather;
-        const hourly = data.hourly;
-        const times = hourly.time;
-        const pressures = hourly.surface_pressure;
-        if (!Array.isArray(times) || !Array.isArray(pressures)) return null;
-        if (!cw.time) return null;
-
-        let idx = times.indexOf(cw.time);
-        if (idx === -1) {
-          // pick closest time
-          let bestDiff = Infinity;
-          let bestIdx = -1;
-          const cwMs = Date.parse(cw.time);
-          for (let i = 0; i < times.length; i++) {
-            const tMs = Date.parse(times[i]);
-            const diff = Math.abs(tMs - cwMs);
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestIdx = i;
-            }
-          }
-          idx = bestIdx;
-        }
-        if (idx == null || idx < 0) return null;
-        const p = pressures[idx];
-        return typeof p === "number" ? p : null;
-      } catch (e) {
-        console.error("Error matching pressure to time", e);
-        return null;
-      }
-    }
-
-    // 🔥 Open-Meteo weather fetch (windspeed km/h → m/s, plus icon + text + pressure)
-    async function fetchWeather(lat, lng) {
-      try {
-        weatherInfoEl.textContent = "Getting weather for this spot...";
+        weatherNowEl.textContent = "Weather now: loading…";
 
         const url =
           `https://api.open-meteo.com/v1/forecast` +
           `?latitude=${lat}&longitude=${lng}` +
-          `&current_weather=true` +
-          `&hourly=surface_pressure` +
-          `&timezone=auto`;
+          `&current=temperature_2m,wind_speed_10m,weather_code,pressure_msl` +
+          `&timezone=auto&wind_speed_unit=ms`;
 
         const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error("Open-Meteo error");
-        }
-
+        if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
-        const cw = data.current_weather || {};
 
-        const temp = typeof cw.temperature === "number" ? cw.temperature : null;
+        const cur = data.current || {};
+        const temp   = cur.temperature_2m;
+        const windMs = cur.wind_speed_10m;
+        const press  = cur.pressure_msl;
+        const code   = cur.weather_code;
 
-        // Open-Meteo windspeed is in km/h → convert to m/s
-        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
-        const windMs  = windKmh != null ? windKmh / 3.6 : null;
-
-        const code = cw.weathercode;
         const { icon, label } = getWeatherIconAndLabel(code);
 
-        // current surface pressure (hPa)
-        const pressure = findPressureForCurrentTime(data);
-
         const parts = [];
-        if (label)           parts.push(label);
-        if (temp != null)    parts.push(`${temp.toFixed(1)} °C`);
-        if (windMs != null)  parts.push(`wind ${windMs.toFixed(1)} m/s`);
-        // pressure is used for predictions, no need to display
+        if (label) parts.push(label);
+        if (typeof temp === "number") parts.push(`${temp.toFixed(1)} °C`);
+        if (typeof windMs === "number") parts.push(`wind ${windMs.toFixed(1)} m/s`);
 
-        const fullText = parts.join(", ");
+        weatherNowEl.textContent =
+          "Weather now: " + icon + " " + parts.join(", ");
 
-        lastWeather = {
-          temp,
-          windMs,
-          label,
-          fullText,
-          pressure
+        latestWeather = {
+          weatherTemp: temp,
+          weatherWindMs: windMs,
+          weatherPressure: press,
+          weatherCode: code,
+          weatherCondition: label,
+          weatherDescription: `${label || "Weather"}, ${typeof temp === "number" ? temp.toFixed(1) + " °C" : "n/a"}, wind ${typeof windMs === "number" ? windMs.toFixed(1) : "n/a"} m/s`,
+          moonPhase: getApproxMoonPhase(new Date())
         };
-
-        if (fullText) {
-          weatherInfoEl.textContent = `Weather now: ${icon} ${fullText}`;
-        } else {
-          weatherInfoEl.textContent = "Weather data not available.";
-        }
       } catch (err) {
-        console.error(err);
-        weatherInfoEl.textContent = "Could not load weather.";
-        lastWeather = null;
+        weatherNowEl.textContent = "Weather now: failed to load.";
+        latestWeather = null;
       }
     }
 
     async function loadSpotsForUser(user) {
+      const q = query(
+        collection(db, "spots"),
+        where("userId", "==", user.uid)
+      );
+      const snap = await getDocs(q);
+      spots = [];
+      snap.forEach(d => spots.push({ id: d.id, ...d.data() }));
+      spots.sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+
+      if (!spots.length) {
+        spotSelectEl.innerHTML =
+          `<option value="">No spots yet – create one first.</option>`;
+        spotSelectEl.disabled = true;
+        return;
+      }
+
+      spotSelectEl.disabled = false;
+      spotSelectEl.innerHTML =
+        `<option value="">Choose a fishing spot…</option>` +
+        spots.map(s =>
+          `<option value="${s.id}">${s.name || "Unnamed spot"}</option>`
+        ).join("");
+
+      if (urlSpotId) {
+        spotSelectEl.value = urlSpotId;
+      }
+      handleSpotChange();
+    }
+
+    function handleSpotChange() {
+      const spotId = spotSelectEl.value;
+      const spot = spots.find(s => s.id === spotId);
+      if (spot && typeof spot.latitude === "number" &&
+          typeof spot.longitude === "number") {
+        latEl.value = spot.latitude.toFixed(6);
+        lngEl.value = spot.longitude.toFixed(6);
+        fetchCurrentWeather(spot.latitude, spot.longitude);
+      }
+    }
+
+    spotSelectEl.addEventListener("change", handleSpotChange);
+
+    useLocationBtn.onclick = () => {
+      if (!navigator.geolocation) {
+        statusMsg.textContent = "Geolocation not available.";
+        return;
+      }
+      statusMsg.textContent = "Getting your location…";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          latEl.value = latitude.toFixed(6);
+          lngEl.value = longitude.toFixed(6);
+          statusMsg.textContent = "";
+          fetchCurrentWeather(latitude, longitude);
+        },
+        (err) => {
+          statusMsg.textContent = "Could not get location: " + err.message;
+        }
+      );
+    };
+
+    async function saveCatch() {
+      statusMsg.textContent = "";
+
+      if (!currentUser) {
+        statusMsg.textContent = "You must be logged in.";
+        return;
+      }
+
+      const species = (speciesEl.value || "").trim() || "fish";
+      const weight  = parseFloat(weightEl.value);
+      const spotId  = spotSelectEl.value;
+
+      if (!spotId) {
+        statusMsg.textContent = "Please choose a fishing spot.";
+        return;
+      }
+      if (isNaN(weight) || weight <= 0) {
+        statusMsg.textContent = "Please enter a valid weight.";
+        return;
+      }
+
+      const lure = (lureEl.value || "").trim();
+      const depth = parseFloat(depthEl.value);
+      const waterTemp = parseFloat(waterTempEl.value);
+      const lat = parseFloat(latEl.value);
+      const lng = parseFloat(lngEl.value);
+      const notes = (document.getElementById("notes").value || "").trim();
+
+      const catchDoc = {
+        userId: currentUser.uid,
+        species,
+        weightKg: weight,
+        spotId,
+        spotName: (spots.find(s => s.id === spotId)?.name) || "",
+        lure,
+        depth: isNaN(depth) ? null : depth,
+        temperature: isNaN(waterTemp) ? null : waterTemp,
+        latitude: isNaN(lat) ? null : lat,
+        longitude: isNaN(lng) ? null : lng,
+        notes,
+        timestamp: Date.now()
+      };
+
+      if (latestWeather) {
+        Object.assign(catchDoc, {
+          weatherTemp: latestWeather.weatherTemp,
+          weatherWindMs: latestWeather.weatherWindMs,
+          weatherPressure: latestWeather.weatherPressure,
+          weatherCode: latestWeather.weatherCode,
+          weatherCondition: latestWeather.weatherCondition,
+          weatherDescription: latestWeather.weatherDescription,
+          moonPhase: latestWeather.moonPhase
+        });
+      }
+
+      saveCatchBtn.disabled = true;
+      saveCatchBtn.textContent = "Saving…";
+
       try {
-        const q = query(
-          collection(db, "spots"),
-          where("userId", "==", user.uid)
-        );
-        const snap = await getDocs(q);
-        savedSpots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        await addDoc(collection(db, "catches"), catchDoc);
+        statusMsg.textContent = "Catch saved. Redirecting…";
 
-        spotSelect.innerHTML = `<option value="">Select a saved spot…</option>`;
-
-        savedSpots
-          .slice()
-          .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-          .forEach(spot => {
-            const name = (spot.name || "").trim();
-            if (!name) return;
-            const opt = document.createElement("option");
-            opt.value = spot.id;       // store document id
-            opt.textContent = name;
-            spotSelect.appendChild(opt);
-          });
-
-        // If no spots exist, disable form
-        if (!savedSpots.length) {
-          msgEl.textContent =
-            "You don't have any fishing spots yet. Go back to the main page and add one first.";
-          spotSelect.disabled   = true;
-          saveCatchBtn.disabled = true;
+        // 🔁 NEW REDIRECT LOGIC
+        if (fromParam === "spot" && spotId) {
+          window.location.href =
+            `spot.html?id=${encodeURIComponent(spotId)}`;
         } else {
-          msgEl.textContent = "";
-          spotSelect.disabled   = false;
-          saveCatchBtn.disabled = false;
+          window.location.href = "index.html";
         }
       } catch (err) {
-        console.error("Error loading spots", err);
-        msgEl.textContent = "Could not load fishing spots.";
+        statusMsg.textContent = "Error saving catch: " + (err.message || err);
+        saveCatchBtn.disabled = false;
+        saveCatchBtn.textContent = "Save catch";
       }
     }
 
-    // If coming from "Add catch" button on a spot: preselect that spot
-    function preselectSpotFromUrl() {
-      const params = new URLSearchParams(window.location.search);
-      const spotId = params.get("spotId");
-      if (!spotId) return;
-
-      // Wait a tick so that options exist
-      setTimeout(() => {
-        if ([...spotSelect.options].some(o => o.value === spotId)) {
-          spotSelect.value = spotId;
-          spotSelect.dispatchEvent(new Event("change"));
-        }
-      }, 200);
-    }
-
-    // When user chooses a spot, auto-fill coordinates + weather
-    spotSelect.addEventListener("change", async () => {
-      weatherInfoEl.textContent = "";
-      lastWeather = null;
-
-      const spotId = spotSelect.value;
-      if (!spotId) {
-        latInput.value = "";
-        lngInput.value = "";
-        return;
-      }
-
-      const match = savedSpots.find(s => s.id === spotId);
-      if (!match) return;
-
-      if (typeof match.latitude === "number") {
-        latInput.value = match.latitude.toFixed(6);
-      } else {
-        latInput.value = "";
-      }
-      if (typeof match.longitude === "number") {
-        lngInput.value = match.longitude.toFixed(6);
-      } else {
-        lngInput.value = "";
-      }
-
-      if (
-        typeof match.latitude === "number" &&
-        typeof match.longitude === "number"
-      ) {
-        await fetchWeather(match.latitude, match.longitude);
-      }
-    });
+    saveCatchBtn.onclick = saveCatch;
 
     onAuthStateChanged(auth, async (user) => {
-      loadingCard.style.display = "none";
-
       if (!user) {
-        protectedContent.style.display = "none";
-        needLogin.style.display        = "block";
+        window.location.href = "index.html";
         return;
       }
-
-      needLogin.style.display        = "none";
-      protectedContent.style.display = "block";
-      userEmailEl.textContent        = user.email;
-
+      currentUser = user;
+      loggedInAsEl.textContent = user.email || "unknown user";
       await loadSpotsForUser(user);
-      preselectSpotFromUrl();
-
-      // Use my location button
-      useLocationBtn.onclick = () => {
-        msgEl.textContent = "";
-        weatherInfoEl.textContent = "";
-        lastWeather = null;
-
-        if (!navigator.geolocation) {
-          msgEl.textContent = "Geolocation is not supported by this browser.";
-          return;
-        }
-
-        msgEl.textContent = "Getting your location...";
-
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            latInput.value = latitude.toFixed(6);
-            lngInput.value = longitude.toFixed(6);
-            msgEl.textContent = "Location set.";
-            await fetchWeather(latitude, longitude);
-          },
-          (error) => {
-            console.error(error);
-            if (error.code === error.PERMISSION_DENIED) {
-              msgEl.textContent = "Permission denied. Please allow location access.";
-            } else {
-              msgEl.textContent = "Could not get location.";
-            }
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 60000
-          }
-        );
-      };
-
-      // Save catch
-      saveCatchBtn.onclick = async () => {
-        msgEl.textContent = "";
-
-        const species = document.getElementById("species").value.trim();
-        const weight  = parseFloat(document.getElementById("weight").value);
-        const spotId  = spotSelect.value;
-        const lure    = document.getElementById("lure").value.trim();
-        const depth   = parseFloat(document.getElementById("depth").value);
-        const temp    = parseFloat(document.getElementById("temp").value);
-        const notes   = document.getElementById("notes").value.trim();
-
-        const lat     = parseFloat(latInput.value);
-        const lng     = parseFloat(lngInput.value);
-
-        if (!species || isNaN(weight)) {
-          msgEl.textContent = "Species and weight are required.";
-          return;
-        }
-
-        if (!spotId) {
-          msgEl.textContent = "Please choose a fishing spot. You can add spots on the main page.";
-          return;
-        }
-
-        const chosenSpot = savedSpots.find(s => s.id === spotId);
-        const spotName   = chosenSpot?.name || "";
-
-        try {
-          await addDoc(collection(db, "catches"), {
-            userId: user.uid,
-            species,
-            weightKg: weight,
-            spotName,
-            spotId,
-            lure,
-            depth,
-            temperature: temp,
-            notes,
-            latitude: isNaN(lat) ? null : lat,
-            longitude: isNaN(lng) ? null : lng,
-            weatherTemp: lastWeather?.temp ?? null,
-            weatherWindMs: lastWeather?.windMs ?? null,
-            weatherCondition: lastWeather?.label ?? null,
-            weatherDescription: lastWeather?.fullText ?? null,
-            weatherPressure: lastWeather?.pressure ?? null,   // NEW: pressure saved, not shown
-            timestamp: Date.now()
-          });
-
-          window.location.href = "index.html";
-        } catch (err) {
-          console.error(err);
-          msgEl.textContent = "Error saving catch.";
-        }
-      };
     });
   </script>
 </body>
