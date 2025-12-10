@@ -98,7 +98,7 @@
       <p id="nextDaysSummary" class="muted-text" style="margin-top:10px;"></p>
     </section>
 
-    <!-- HOT TIMES TOMORROW (kept, still general) -->
+    <!-- HOT TIMES TOMORROW -->
     <section class="card">
       <div class="card-header">
         <h2>Hot times tomorrow</h2>
@@ -222,7 +222,7 @@
         "https://api.open-meteo.com/v1/forecast" +
         `?latitude=${lat}&longitude=${lon}` +
         "&hourly=temperature_2m,windspeed_10m,pressure_msl,weathercode,apparent_temperature" +
-        "&daily=temperature_2m_max,temperature_2m_min,weathercode,pressure_msl_max,pressure_msl_min,moon_phase,sunrise,sunset" +
+        "&daily=temperature_2m_max,temperature_2m_min,weathercode,pressure_msl,moon_phase,sunrise,sunset" +
         "&timezone=auto&forecast_days=4";
 
       const res = await fetch(url);
@@ -242,8 +242,7 @@
           date: daily.time[i],
           tMin: daily.temperature_2m_min[i],
           tMax: daily.temperature_2m_max[i],
-          pressureLow: daily.pressure_msl_min[i],
-          pressureHigh: daily.pressure_msl_max[i],
+          pressure: daily.pressure_msl[i],
           moonPhase: daily.moon_phase[i],
           sunrise: daily.sunrise[i],
           sunset: daily.sunset[i]
@@ -293,7 +292,7 @@
       for (const day of daysToUse) {
         const dayLabel = formatDateShortLabel(day.date);
         const dayMidTemp = (day.tMin + day.tMax) / 2;
-        const dayMidPressure = (day.pressureLow + day.pressureHigh) / 2;
+        const dayMidPressure = day.pressure;
         const dayMoon = day.moonPhase;
 
         let matches = 0;
@@ -324,7 +323,9 @@
           }
 
           // Wind: tolerance ±4 m/s
-          const windDiff = Math.abs(w - (forecast.current_weather?.windspeed || w));
+          const currentWind = forecast.current_weather?.windspeed;
+          const targetWind = safeNum(currentWind) ? currentWind : w;
+          const windDiff = Math.abs(w - targetWind);
           if (windDiff <= 2) {
             matches += 1.1;
           } else if (windDiff <= 4) {
@@ -385,7 +386,7 @@
         debug.push(
           `${day.date} (${dayLabel}) – score=${scorePct}%, ` +
           `usedCatches=${used}, matches=${matches.toFixed(2)}, penalties=${penalties.toFixed(2)}, ` +
-          `Tmid=${dayMidTemp.toFixed(1)}°C, Pmid=${dayMidPressure.toFixed(1)} hPa`
+          `Tmid=${dayMidTemp.toFixed(1)}°C, P=${dayMidPressure.toFixed(1)} hPa`
         );
       }
 
