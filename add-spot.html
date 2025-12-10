@@ -5,7 +5,7 @@
   <title>Add fishing spot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Your main stylesheet -->
+  <!-- Main app styles -->
   <link rel="stylesheet" href="style.css" />
 
   <!-- Leaflet CSS -->
@@ -29,9 +29,7 @@
     /* Search row above the map */
     .map-search-row {
       display: flex;
-      gap: 8px;
       flex-wrap: wrap;
-      align-items: center;
       margin-top: 8px;
     }
 
@@ -41,14 +39,14 @@
       min-width: 220px;
     }
 
-    /* Search input: match your input style but pill-shaped */
+    /* Search input: match other inputs but pill-shaped */
     .map-search-input {
       width: 100%;
-      padding: 12px 48px 12px 40px; /* left for icon, right for X */
+      padding: 12px 48px 12px 40px; /* left icon + right X */
       border-radius: 9999px;
-      background: #0f172a;         /* same as other inputs */
-      border: 1px solid #1e293b;   /* same border */
-      color: #e5e7eb;              /* same text color */
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      color: #e5e7eb;
       font-size: 16px;
     }
 
@@ -128,11 +126,11 @@
       color: #9ca3af;
     }
 
-    /* Move Leaflet zoom controls to top-right (inside map) */
+    /* Move Leaflet zoom controls to very top-right of the map */
     .leaflet-top.leaflet-left {
       right: 16px !important;
       left: auto !important;
-      top: 130px !important; /* below the search bar area */
+      top: 16px !important;
     }
   </style>
 </head>
@@ -190,7 +188,7 @@
         <button class="secondary-btn" id="useLocationBtn">Use my location</button>
       </div>
 
-      <!-- Search + map -->
+      <!-- Search bar (no button) -->
       <div class="map-search-row">
         <div class="map-search-wrapper">
           <span class="map-search-icon">🔍</span>
@@ -205,7 +203,6 @@
           </button>
           <ul id="mapSearchSuggestions" class="map-search-suggestions"></ul>
         </div>
-        <button class="secondary-btn" id="mapSearchBtn">Search</button>
       </div>
 
       <div id="map"></div>
@@ -263,7 +260,6 @@
     const saveSpotBtn      = document.getElementById("saveSpotBtn");
     const statusMsg        = document.getElementById("statusMsg");
     const mapSearchInput   = document.getElementById("mapSearchInput");
-    const mapSearchBtn     = document.getElementById("mapSearchBtn");
     const mapSearchClear   = document.getElementById("mapSearchClearBtn");
     const suggestionsEl    = document.getElementById("mapSearchSuggestions");
 
@@ -275,7 +271,7 @@
       window.location.href = "index.html";
     };
 
-    // ---------- Name normalization (duplicate protection) ----------
+    // ---------- Name normalization ----------
     function normalizeSpotName(name) {
       return name
         .normalize("NFKD")
@@ -370,10 +366,12 @@
       const lat = parseFloat(result.lat);
       const lon = parseFloat(result.lon);
       if (isNaN(lat) || isNaN(lon)) return;
+
       marker.setLatLng([lat, lon]);
       map.setView([lat, lon], 12);
       latEl.value = lat.toFixed(6);
       lngEl.value = lon.toFixed(6);
+
       mapSearchInput.value = result.display_name || "";
       mapSearchClear.style.display = mapSearchInput.value ? "block" : "none";
       statusMsg.textContent = `Location set from search: ${result.display_name}`;
@@ -399,8 +397,6 @@
         statusMsg.textContent = "Search failed: " + (err.message || err);
       }
     }
-
-    mapSearchBtn.onclick = searchLocation;
 
     mapSearchInput.addEventListener("input", () => {
       const v = mapSearchInput.value;
