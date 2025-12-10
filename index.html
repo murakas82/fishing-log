@@ -149,7 +149,7 @@
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
             <button class="secondary-btn" id="settingsBtn">Settings</button>
-            <button class="secondary-btn btn-back-main" id="logoutBtn">Log out</button>
+            <button class="secondary-btn" id="logoutBtn">Log out</button>
           </div>
         </div>
       `;
@@ -222,7 +222,7 @@
       const spots = [];
       snap.forEach(docSnap => spots.push({ id: docSnap.id, ...docSnap.data() }));
 
-      // For each spot, load catches for stats (simple, not heavily optimised)
+      // Load all catches once, then filter per spot
       const catchesSnap = await getDocs(
         query(collection(db, "catches"), where("userId", "==", user.uid))
       );
@@ -256,10 +256,10 @@
             ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
             : null;
 
+        // Removed right-side "X catches" label here
         spotDiv.innerHTML = `
           <div class="spot-header-line">
             <h3>${spot.name || "Unnamed spot"}</h3>
-            <span class="muted-text">${total} catches</span>
           </div>
           <div class="muted-text">${statsLine}</div>
         `;
@@ -341,5 +341,3 @@
   </script>
 </body>
 </html>
-
-
