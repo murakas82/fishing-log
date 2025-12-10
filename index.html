@@ -16,9 +16,7 @@
             Track your catches anywhere – with login, spots, weather &amp; predictions.
           </p>
         </div>
-        <div id="authArea">
-          <!-- Filled by JS -->
-        </div>
+        <div id="authArea"></div>
       </div>
     </header>
 
@@ -40,7 +38,7 @@
       <div id="spotsList"></div>
     </div>
 
-    <!-- Loading state before auth resolved -->
+    <!-- Loading -->
     <div class="card" id="loadingCard">
       <div class="loading-center">
         <div class="spinner"></div>
@@ -67,7 +65,6 @@
       getFirestore,
       doc,
       getDoc,
-      setDoc,
       collection,
       getDocs,
       query,
@@ -96,9 +93,7 @@
     const mapViewBtn   = document.getElementById("mapViewBtn");
     const addSpotBtn   = document.getElementById("addSpotBtn");
 
-    /* ---------------------------
-       Auth header rendering
-       --------------------------- */
+    /* ---------- Auth form ---------- */
 
     function renderAuthForm(errorMessage = "") {
       authArea.innerHTML = `
@@ -127,9 +122,9 @@
         </div>
       `;
 
-      const form        = document.getElementById("authForm");
-      const signUpBtn   = document.getElementById("signUpBtn");
-      const googleBtn   = document.getElementById("googleLoginBtn");
+      const form      = document.getElementById("authForm");
+      const signUpBtn = document.getElementById("signUpBtn");
+      const googleBtn = document.getElementById("googleLoginBtn");
 
       form.onsubmit = async (e) => {
         e.preventDefault();
@@ -181,11 +176,8 @@
         </div>
       `;
 
-      const logoutBtn = document.getElementById("logoutBtn");
-      const settingsBtn = document.getElementById("settingsBtn");
-
-      logoutBtn.onclick = () => signOut(auth);
-      settingsBtn.onclick = () => {
+      document.getElementById("logoutBtn").onclick  = () => signOut(auth);
+      document.getElementById("settingsBtn").onclick = () => {
         window.location.href = "settings.html";
       };
     }
@@ -197,9 +189,7 @@
       return snap.data().displayName || null;
     }
 
-    /* ---------------------------
-       Stats
-       --------------------------- */
+    /* ---------- Stats ---------- */
 
     async function loadStats(user) {
       const q = query(
@@ -238,12 +228,10 @@
       `;
     }
 
-    /* ---------------------------
-       Prediction helpers
-       --------------------------- */
+    /* ---------- Prediction helpers (same as before) ---------- */
 
     function getApproxMoonPhase(date) {
-      const lp = 2551443; // seconds in a lunar month
+      const lp = 2551443;
       const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
       const diff = date.getTime() - knownNewMoon;
       const phase = (diff / 1000) % lp;
@@ -307,7 +295,6 @@
     async function fetchWeatherAndPredictionForSpot(spot, spotCatches) {
       const weatherEl = document.getElementById(`spotWeather-${spot.id}`);
       const predEl    = document.getElementById(`spotPred-${spot.id}`);
-
       if (!weatherEl || !predEl) return;
 
       if (typeof spot.latitude !== "number" ||
@@ -425,9 +412,7 @@
       }
     }
 
-    /* ---------------------------
-       Load spots + attach weather
-       --------------------------- */
+    /* ---------- Load spots ---------- */
 
     async function loadSpots(user) {
       const q = query(
@@ -437,7 +422,8 @@
       const snap = await getDocs(q);
 
       if (snap.empty) {
-        spotsList.innerHTML = `<p class="muted-text">No spots yet. Add your first fishing spot.</p>`;
+        spotsList.innerHTML =
+          `<p class="muted-text">No spots yet. Add your first fishing spot.</p>`;
         return;
       }
 
@@ -482,8 +468,12 @@
             <h3>${spot.name || "Unnamed spot"}</h3>
           </div>
           <div class="muted-text">${statsLine}</div>
-          <div class="muted-text" id="spotWeather-${spot.id}">Weather now: loading…</div>
-          <div class="muted-text" id="spotPred-${spot.id}">Prediction (next 3 days): loading…</div>
+          <div class="muted-text" id="spotWeather-${spot.id}">
+            Weather now: loading…
+          </div>
+          <div class="muted-text" id="spotPred-${spot.id}">
+            Prediction (next 3 days): loading…
+          </div>
         `;
 
         const actionsDiv = document.createElement("div");
@@ -499,19 +489,18 @@
         const addCatchBtn = document.createElement("button");
         addCatchBtn.className = "secondary-btn";
         addCatchBtn.textContent = "Add catch";
+        // IMPORTANT CHANGE: from main → from=main
         addCatchBtn.onclick = () => {
-          window.location.href = `add-catch.html?spotId=${encodeURIComponent(
-            spot.id
-          )}`;
+          window.location.href =
+            `add-catch.html?spotId=${encodeURIComponent(spot.id)}&from=main`;
         };
 
         const predBtn = document.createElement("button");
         predBtn.className = "secondary-btn";
         predBtn.textContent = "Predictions";
         predBtn.onclick = () => {
-          window.location.href = `predictions.html?spotId=${encodeURIComponent(
-            spot.id
-          )}`;
+          window.location.href =
+            `predictions.html?spotId=${encodeURIComponent(spot.id)}`;
         };
 
         actionsDiv.appendChild(openBtn);
@@ -535,9 +524,7 @@
       }
     }
 
-    /* ---------------------------
-       Auth state & navigation
-       --------------------------- */
+    /* ---------- Auth state ---------- */
 
     onAuthStateChanged(auth, async (user) => {
       loadingCard.style.display = "none";
