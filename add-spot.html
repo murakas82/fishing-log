@@ -1,303 +1,550 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Add Fishing Spot</title>
+  <meta charset="UTF-8" />
+  <title>Add fishing spot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <link rel="stylesheet" href="style.css" />
+  <!-- Your main stylesheet -->
+  <link rel="stylesheet" href="style.css" />
 
-    <!-- Leaflet -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
 
-    <style>
-        /* ===== Search bar container ===== */
-        .search-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 10px 0 5px 0;
-        }
+  <style>
+    /* Map container inside card */
+    #map {
+      margin-top: 12px;
+      width: 100%;
+      height: 320px;
+      border-radius: 16px;
+      overflow: hidden;
+    }
 
-        .search-bar-wrapper {
-            position: relative;
-            flex: 1;
-        }
+    /* Search row above the map */
+    .map-search-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
 
-        .search-input {
-            width: 100%;
-            padding: 12px 45px 12px 40px;
-            border-radius: 999px;
-            border: 1px solid #1f8bfd;
-            background: #0d1625;
-            color: white;
-            font-size: 16px;
-            outline: none;
-        }
+    .map-search-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 220px;
+    }
 
-        .search-input::placeholder {
-            color: #7a8ba3;
-        }
+    /* Search input: match your input style but pill-shaped */
+    .map-search-input {
+      width: 100%;
+      padding: 12px 48px 12px 40px; /* left for icon, right for X */
+      border-radius: 9999px;
+      background: #0f172a;         /* same as other inputs */
+      border: 1px solid #1e293b;   /* same border */
+      color: #e5e7eb;              /* same text color */
+      font-size: 16px;
+    }
 
-        .search-icon {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 18px;
-            color: #7a8ba3;
-        }
+    .map-search-input::placeholder {
+      color: #64748b;
+    }
 
-        .clear-icon {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 18px;
-            cursor: pointer;
-            color: #7a8ba3;
-            display: none;
-        }
+    /* Magnifying glass icon */
+    .map-search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      color: #9ca3af;
+      pointer-events: none;
+    }
 
-        .search-btn {
-            padding: 10px 20px;
-            border-radius: 999px;
-            border: 1px solid #1f8bfd;
-            background: transparent;
-            color: #1f8bfd;
-            cursor: pointer;
-            font-size: 16px;
-        }
+    /* Clear X button */
+    .map-search-clear {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: none;
+      background: transparent;
+      color: #9ca3af;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0;
+      display: none;
+    }
 
-        .search-btn:hover {
-            background: #1f8bfd33;
-        }
+    .map-search-clear:hover {
+      color: #e5e7eb;
+    }
 
-        .autocomplete-box {
-            background: #0d1625;
-            border: 1px solid #1f8bfd;
-            margin-top: 4px;
-            border-radius: 12px;
-            max-height: 250px;
-            overflow-y: auto;
-            display: none;
-        }
+    /* Suggestions dropdown */
+    .map-search-suggestions {
+      position: absolute;
+      z-index: 1000;
+      margin-top: 4px;
+      width: 100%;
+      list-style: none;
+      padding: 4px 0;
+      border-radius: 12px;
+      background: #020617;
+      border: 1px solid #1e293b;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.6);
+      display: none;
+    }
 
-        .autocomplete-item {
-            padding: 12px;
-            cursor: pointer;
-            border-bottom: 1px solid #1a2638;
-            color: white;
-        }
+    .map-search-suggestions li {
+      padding: 8px 12px;
+      font-size: 14px;
+      color: #e5e7eb;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(15,23,42,0.9);
+    }
 
-        .autocomplete-item:hover {
-            background: #1a2638;
-        }
+    .map-search-suggestions li:last-child {
+      border-bottom: none;
+    }
 
-        /* =======================================================
-           MOVE LEAFLET ZOOM BUTTONS TO TOP-RIGHT
-        ======================================================= */
-        .leaflet-top.leaflet-left {
-            right: 10px !important;
-            left: auto !important;
-            top: 140px !important;   /* keeps it below search bar */
-        }
+    .map-search-suggestions li:hover {
+      background: #111827;
+    }
 
-        .leaflet-control-zoom {
-            box-shadow: none !important;
-        }
-    </style>
+    .map-search-suggestions .suggestion-main {
+      font-weight: 500;
+    }
+
+    .map-search-suggestions .suggestion-sub {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    /* Move Leaflet zoom controls to top-right (inside map) */
+    .leaflet-top.leaflet-left {
+      right: 16px !important;
+      left: auto !important;
+      top: 130px !important; /* below the search bar area */
+    }
+  </style>
 </head>
-
 <body>
+  <div class="app fade-in">
+    <!-- Header / Back to main -->
+    <header class="card">
+      <div class="card-header">
+        <div>
+          <h1>Add a fishing spot</h1>
+          <p class="muted-text">
+            Save a named spot with GPS coordinates.
+          </p>
+        </div>
+        <div>
+          <button class="secondary-btn btn-back-main" id="backBtn">
+            ← Back to main
+          </button>
+        </div>
+      </div>
+    </header>
 
-<div class="container">
-    <h1>Add a fishing spot</h1>
-
-    <p>Save a named spot with GPS coordinates.</p>
-
+    <!-- Main card -->
     <div class="card">
-        <label>Spot name</label>
-        <input id="spotName" type="text" placeholder="Lake Example" />
+      <div class="card-header">
+        <div class="muted-text">
+          Logged in as <span id="loggedInAs">…</span>
+        </div>
+      </div>
 
-        <label>Latitude</label>
-        <input id="latitude" type="number" step="0.000001" />
-
-        <label>Longitude</label>
-        <input id="longitude" type="number" step="0.000001" />
-
-        <button id="useLocationBtn" class="small-btn">Use my location</button>
-
-        <!-- Search bar -->
-        <div class="search-container">
-            <div class="search-bar-wrapper">
-                <span class="search-icon">🔍</span>
-                <input id="searchInput" class="search-input" placeholder="Search location…" />
-                <span id="clearSearch" class="clear-icon">✖</span>
-            </div>
-            <button id="searchBtn" class="search-btn">Search</button>
+      <!-- Spot fields -->
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="spotName">Spot name</label>
+          <input
+            id="spotName"
+            type="text"
+            placeholder="Paunküla, Pautsaare, etc."
+            autocomplete="off"
+          />
         </div>
 
-        <div id="autocompleteList" class="autocomplete-box"></div>
+        <div class="form-field">
+          <label for="latitude">Latitude</label>
+          <input id="latitude" type="number" step="0.000001" />
+        </div>
 
-        <div id="map" style="height: 350px; border-radius: 12px; margin-top: 10px;"></div>
+        <div class="form-field">
+          <label for="longitude">Longitude</label>
+          <input id="longitude" type="number" step="0.000001" />
+        </div>
+      </div>
 
-        <button id="saveSpotBtn" class="green-btn" style="margin-top: 20px;">Save fishing spot</button>
-        <button onclick="window.location.href='index.html'" class="back-btn">← Back to main</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="secondary-btn" id="useLocationBtn">Use my location</button>
+      </div>
 
-        <p id="errorMsg" class="error"></p>
+      <!-- Search + map -->
+      <div class="map-search-row">
+        <div class="map-search-wrapper">
+          <span class="map-search-icon">🔍</span>
+          <input
+            id="mapSearchInput"
+            class="map-search-input"
+            type="text"
+            placeholder="Search place (town, lake, address, etc.)"
+          />
+          <button type="button" class="map-search-clear" id="mapSearchClearBtn">
+            ✕
+          </button>
+          <ul id="mapSearchSuggestions" class="map-search-suggestions"></ul>
+        </div>
+        <button class="secondary-btn" id="mapSearchBtn">Search</button>
+      </div>
+
+      <div id="map"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+        <button class="primary-btn" id="saveSpotBtn">Save fishing spot</button>
+      </div>
+
+      <p id="statusMsg" class="muted-text" style="margin-top:10px;"></p>
     </div>
-</div>
+  </div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script type="module">
+    import { initializeApp }
+      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import {
+      getAuth,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      getDocs,
+      query,
+      where
+    } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
     const firebaseConfig = {
-        apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
-        authDomain: "fishing-log-app-murx.firebaseapp.com",
-        projectId: "fishing-log-app-murx",
-        storageBucket: "fishing-log-app-murx.appspot.com",
-        messagingSenderId: "1056807867882",
-        appId: "1:1056807867882:web:e59ddd8f6353d190880e93",
-        measurementId: "G-J3EXD082RP"
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
     };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth();
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
 
-    let userId = null;
+    const backBtn          = document.getElementById("backBtn");
+    const loggedInAsEl     = document.getElementById("loggedInAs");
+    const spotNameEl       = document.getElementById("spotName");
+    const latEl            = document.getElementById("latitude");
+    const lngEl            = document.getElementById("longitude");
+    const useLocationBtn   = document.getElementById("useLocationBtn");
+    const saveSpotBtn      = document.getElementById("saveSpotBtn");
+    const statusMsg        = document.getElementById("statusMsg");
+    const mapSearchInput   = document.getElementById("mapSearchInput");
+    const mapSearchBtn     = document.getElementById("mapSearchBtn");
+    const mapSearchClear   = document.getElementById("mapSearchClearBtn");
+    const suggestionsEl    = document.getElementById("mapSearchSuggestions");
 
-    onAuthStateChanged(auth, (user) => {
-        if (!user) window.location.href = "index.html";
-        else userId = user.uid;
-    });
+    let currentUser = null;
+    let map, marker;
+    let searchDebounceId = null;
 
-    /* ============================================================
-       LEAFLET MAP SETUP
-    ============================================================ */
-    const map = L.map("map").setView([59.437, 24.7536], 10);
-    let marker = null;
+    backBtn.onclick = () => {
+      window.location.href = "index.html";
+    };
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18
-    }).addTo(map);
-
-    function setMarker(lat, lng) {
-        if (marker) marker.remove();
-        marker = L.marker([lat, lng]).addTo(map);
-        map.setView([lat, lng], 14);
+    // ---------- Name normalization (duplicate protection) ----------
+    function normalizeSpotName(name) {
+      return name
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
     }
 
-    /* ============================================================
-       SEARCH AUTOCOMPLETE USING NOMINATIM
-    ============================================================ */
-    const searchInput = document.getElementById("searchInput");
-    const autocompleteList = document.getElementById("autocompleteList");
-    const clearSearch = document.getElementById("clearSearch");
+    function prettifySpotName(name) {
+      const cleaned = name.replace(/\s+/g, " ").trim();
+      if (!cleaned) return "";
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
 
-    async function searchLocation(query) {
-        if (!query.trim()) return;
+    // ---------- Leaflet map ----------
+    function initMap() {
+      const startLat = 59.4;
+      const startLng = 24.7;
 
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`;
+      map = L.map("map").setView([startLat, startLng], 7);
 
-        const res = await fetch(url);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors"
+      }).addTo(map);
+
+      marker = L.marker([startLat, startLng], { draggable: true }).addTo(map);
+
+      marker.on("dragend", () => {
+        const { lat, lng } = marker.getLatLng();
+        latEl.value = lat.toFixed(6);
+        lngEl.value = lng.toFixed(6);
+      });
+
+      map.on("click", (e) => {
+        marker.setLatLng(e.latlng);
+        latEl.value = e.latlng.lat.toFixed(6);
+        lngEl.value = e.latlng.lng.toFixed(6);
+      });
+    }
+
+    // ---------- Nominatim search & suggestions ----------
+    function hideSuggestions() {
+      suggestionsEl.style.display = "none";
+      suggestionsEl.innerHTML = "";
+    }
+
+    function showSuggestions(items) {
+      if (!items.length) {
+        hideSuggestions();
+        return;
+      }
+      suggestionsEl.innerHTML = "";
+      items.forEach(item => {
+        const li = document.createElement("li");
+        const [main, ...rest] = (item.display_name || "").split(",");
+        const sub = rest.join(",").trim();
+        li.innerHTML = `
+          <div class="suggestion-main">${main || "Unnamed place"}</div>
+          ${sub ? `<div class="suggestion-sub">${sub}</div>` : ""}
+        `;
+        li.onclick = () => {
+          applySearchResult(item);
+          hideSuggestions();
+        };
+        suggestionsEl.appendChild(li);
+      });
+      suggestionsEl.style.display = "block";
+    }
+
+    async function fetchSuggestions(qText) {
+      if (!qText) {
+        hideSuggestions();
+        return;
+      }
+      try {
+        const url =
+          "https://nominatim.openstreetmap.org/search" +
+          `?format=json&q=${encodeURIComponent(qText)}&limit=5`;
+        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
-
-        autocompleteList.innerHTML = "";
-        autocompleteList.style.display = "block";
-
-        data.forEach(item => {
-            const div = document.createElement("div");
-            div.className = "autocomplete-item";
-            div.textContent = item.display_name;
-
-            div.onclick = () => {
-                searchInput.value = item.display_name;
-                autocompleteList.style.display = "none";
-                clearSearch.style.display = "block";
-
-                document.getElementById("latitude").value = item.lat;
-                document.getElementById("longitude").value = item.lon;
-
-                setMarker(item.lat, item.lon);
-            };
-
-            autocompleteList.appendChild(div);
-        });
+        showSuggestions(data);
+      } catch (err) {
+        console.error("Suggestion search failed:", err);
+        hideSuggestions();
+      }
     }
 
-    searchInput.addEventListener("input", () => {
-        clearSearch.style.display = searchInput.value ? "block" : "none";
-        if (searchInput.value.length > 2) searchLocation(searchInput.value);
+    function applySearchResult(result) {
+      const lat = parseFloat(result.lat);
+      const lon = parseFloat(result.lon);
+      if (isNaN(lat) || isNaN(lon)) return;
+      marker.setLatLng([lat, lon]);
+      map.setView([lat, lon], 12);
+      latEl.value = lat.toFixed(6);
+      lngEl.value = lon.toFixed(6);
+      mapSearchInput.value = result.display_name || "";
+      mapSearchClear.style.display = mapSearchInput.value ? "block" : "none";
+      statusMsg.textContent = `Location set from search: ${result.display_name}`;
+    }
+
+    async function searchLocation() {
+      const qText = mapSearchInput.value.trim();
+      if (!qText) return;
+      statusMsg.textContent = "Searching location…";
+      try {
+        const url =
+          "https://nominatim.openstreetmap.org/search" +
+          `?format=json&q=${encodeURIComponent(qText)}&limit=1`;
+        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        if (!data.length) {
+          statusMsg.textContent = "No results found for that search.";
+          return;
+        }
+        applySearchResult(data[0]);
+      } catch (err) {
+        statusMsg.textContent = "Search failed: " + (err.message || err);
+      }
+    }
+
+    mapSearchBtn.onclick = searchLocation;
+
+    mapSearchInput.addEventListener("input", () => {
+      const v = mapSearchInput.value;
+      mapSearchClear.style.display = v ? "block" : "none";
+      if (searchDebounceId) clearTimeout(searchDebounceId);
+      const trimmed = v.trim();
+      if (!trimmed) {
+        hideSuggestions();
+        return;
+      }
+      searchDebounceId = setTimeout(() => {
+        fetchSuggestions(trimmed);
+      }, 400);
     });
 
-    document.getElementById("searchBtn").onclick = () => searchLocation(searchInput.value);
+    mapSearchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        hideSuggestions();
+        searchLocation();
+      }
+    });
 
-    clearSearch.onclick = () => {
-        searchInput.value = "";
-        autocompleteList.style.display = "none";
-        clearSearch.style.display = "none";
+    mapSearchClear.onclick = () => {
+      mapSearchInput.value = "";
+      mapSearchClear.style.display = "none";
+      hideSuggestions();
+      statusMsg.textContent = "";
     };
 
-    /* ============================================================
-       USE MY LOCATION
-    ============================================================ */
-    document.getElementById("useLocationBtn").onclick = () => {
-        navigator.geolocation.getCurrentPosition((pos) => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".map-search-wrapper")) {
+        hideSuggestions();
+      }
+    });
 
-            document.getElementById("latitude").value = lat;
-            document.getElementById("longitude").value = lon;
-
-            setMarker(lat, lon);
-        });
-    };
-
-    /* ============================================================
-       SAVE SPOT
-    ============================================================ */
-    document.getElementById("saveSpotBtn").onclick = async () => {
-        const nameInput = document.getElementById("spotName").value.trim();
-        const name = nameInput.charAt(0).toUpperCase() + nameInput.slice(1);
-        const lat = parseFloat(document.getElementById("latitude").value);
-        const lon = parseFloat(document.getElementById("longitude").value);
-        const errorMsg = document.getElementById("errorMsg");
-
-        if (!name || isNaN(lat) || isNaN(lon)) {
-            errorMsg.textContent = "Please fill all fields.";
-            return;
+    // ---------- Geolocation ----------
+    useLocationBtn.onclick = () => {
+      if (!navigator.geolocation) {
+        statusMsg.textContent = "Geolocation not available.";
+        return;
+      }
+      statusMsg.textContent = "Getting your current location…";
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          latEl.value = latitude.toFixed(6);
+          lngEl.value = longitude.toFixed(6);
+          if (map && marker) {
+            marker.setLatLng([latitude, longitude]);
+            map.setView([latitude, longitude], 12);
+          }
+          statusMsg.textContent = "";
+        },
+        (err) => {
+          statusMsg.textContent = "Could not get location: " + err.message;
         }
+      );
+    };
 
+    // ---------- Save spot ----------
+    async function saveSpot() {
+      statusMsg.textContent = "";
+      if (!currentUser) {
+        statusMsg.textContent = "You must be logged in.";
+        return;
+      }
+
+      let rawName = spotNameEl.value || "";
+      rawName = rawName.replace(/\s+/g, " ");
+      const prettyName = prettifySpotName(rawName);
+      const normalized = normalizeSpotName(rawName);
+
+      if (!normalized) {
+        statusMsg.textContent = "Spot name is required.";
+        return;
+      }
+
+      const lat = parseFloat(latEl.value);
+      const lng = parseFloat(lngEl.value);
+      if (isNaN(lat) || isNaN(lng)) {
+        statusMsg.textContent = "Please set the location.";
+        return;
+      }
+
+      saveSpotBtn.disabled = true;
+      saveSpotBtn.textContent = "Saving…";
+
+      try {
         const q = query(
-            collection(db, "spots"),
-            where("userId", "==", userId)
+          collection(db, "spots"),
+          where("userId", "==", currentUser.uid)
         );
-        const snapshot = await getDocs(q);
+        const snap = await getDocs(q);
 
-        const exists = snapshot.docs.some(
-            doc => doc.data().name.trim().toLowerCase() === name.trim().toLowerCase()
-        );
+        let exists = false;
+        snap.forEach(d => {
+          const data = d.data();
+          const base = data.normalizedName || data.name || "";
+          if (!base) return;
+          const n = normalizeSpotName(base);
+          if (n === normalized) exists = true;
+        });
 
         if (exists) {
-            errorMsg.textContent = "A spot with this name already exists.";
-            return;
+          statusMsg.textContent =
+            "You already have a spot with this name (ignoring case & spaces).";
+          saveSpotBtn.disabled = false;
+          saveSpotBtn.textContent = "Save fishing spot";
+          return;
         }
 
         await addDoc(collection(db, "spots"), {
-            name,
-            latitude: lat,
-            longitude: lon,
-            userId
+          userId: currentUser.uid,
+          name: prettyName,
+          normalizedName: normalized,
+          latitude: lat,
+          longitude: lng,
+          createdAt: Date.now()
         });
 
-        window.location.href = "index.html";
-    };
-</script>
+        statusMsg.textContent = "Spot saved. Redirecting…";
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 800);
+      } catch (err) {
+        statusMsg.textContent = "Error saving spot: " + (err.message || err);
+        saveSpotBtn.disabled = false;
+        saveSpotBtn.textContent = "Save fishing spot";
+      }
+    }
 
+    saveSpotBtn.onclick = saveSpot;
+
+    // ---------- Auth ----------
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      currentUser = user;
+      loggedInAsEl.textContent = user.email || "unknown user";
+      initMap();
+    });
+  </script>
 </body>
 </html>
