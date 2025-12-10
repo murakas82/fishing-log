@@ -354,5 +354,15 @@ textarea {
   resize: vertical;
 }
 
+/* Force white text inside Leaflet popups */
+.leaflet-popup-content .secondary-btn {
+  color: #ffffff !important;
+}
+
+/* Ensure the border also stays visible with white text */
+.leaflet-popup-content .secondary-btn {
+  border-color: rgba(255,255,255,0.4) !important;
+}
+
 
 
