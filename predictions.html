@@ -1,198 +1,531 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
+  <title>Predictions – My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Predictions • Fishing Log</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
-    h1,h2,h3 { margin: 0.2rem 0 0.6rem; }
-    .muted { color: #6b7280; }
-    .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    @media (prefers-color-scheme: dark) {
-      .card { border-color: #374151; }
-    }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 12px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-    .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid #9ca3af; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-  </style>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://www.googleapis.com">
 </head>
-<body>
-  <h1>Predictions</h1>
-  <p class="muted">Forecast match vs your past catches at this spot.</p>
-  <p>../index.html← Back to main</a></p>
+<body class="page">
+  <main class="page-inner">
+    <!-- Header -->
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">Predictions</h1>
+        <p class="page-subtitle">
+          Forecast match vs your past catches at this spot.
+        </p>
+      </div>
+      <button id="backBtn" class="btn-outline">
+        ← Back to main
+      </button>
+    </header>
 
-  <h2>Loading spot…</h2>
-  <div class="card">
-    <label>Species for prediction</label>
-    <select id="species">
-      <option value="all">All species</option>
-      <!-- TODO: populate from your catch history -->
-    </select>
-  </div>
+    <!-- Spot summary + species selector -->
+    <section class="card">
+      <div class="card-row card-row-between card-row-center">
+        <div>
+          <h2 id="spotName" class="card-title">Loading spot…</h2>
+          <p id="spotSummary" class="card-subtitle"></p>
+        </div>
+        <div class="predictions-species-picker">
+          <label for="speciesSelect">Species for prediction</label>
+          <select id="speciesSelect" class="input-field"></select>
+        </div>
+      </div>
+    </section>
 
-  <h3>Next 3 days</h3>
-  <div id="forecast" class="grid">
-    <div class="card"><span class="spinner"></span> Loading forecast…</div>
-  </div>
+    <!-- Next 3 days -->
+    <section class="card">
+      <h3 class="card-section-title">Next 3 days</h3>
+      <div id="daysContainer" class="list-vertical"></div>
+    </section>
 
-  <h3>Hot times tomorrow</h3>
-  <div id="hot-times" class="card">
-    <span class="spinner"></span> Loading hot times…
-    <p class="muted">Times are between <strong>1 hour before sunrise</strong> and <strong>1 hour after sunset</strong>, based on your catches with weather data.</p>
-  </div>
+    <!-- Hot times tomorrow -->
+    <section class="card">
+      <h3 class="card-section-title">Hot times tomorrow</h3>
+      <p id="hotTimesInfo" class="card-subtitle"></p>
+      <ul id="hotTimesList" class="list-vertical"></ul>
+    </section>
 
-  <h3>Debug view (why these scores?)</h3>
-  <div id="debug" class="card mono">
-    <span class="spinner"></span> Loading debug information…
-  </div>
+    <!-- Debug -->
+    <section class="card">
+      <h3 class="card-section-title">Debug view (why these scores?)</h3>
+      <pre id="debugOutput" class="debug-output"></pre>
+    </section>
+  </main>
 
-  <script>
-    // --- Configuration ---
-    const coords = { latitude: 59.1177, longitude: 25.372767 }; // Keila area
-    const DAYS_TO_SHOW = 3;
+  <!-- Firebase + predictions logic -->
+  <script type="module">
+    // --- Firebase imports ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import {
+      getAuth,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      collection,
+      getDocs,
+      query,
+      orderBy
+    } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-    // --- Build the corrected Open-Meteo URL ---
-    // Notes:
-    // - hourly: wind_speed_10m, weather_code (correct names)
-    // - daily: valid variables (moon_phase is not supported in forecast API)
-    // - timezone=auto uses local time based on coordinates
-    const baseUrl = "https://api.open-meteo.com/v1/forecast";
-    const params = new URLSearchParams({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      hourly: [
-        "temperature_2m",
-        "wind_speed_10m",
-        "pressure_msl",
-        "weather_code",
-        "apparent_temperature"
-      ].join(","),
-      daily: [
-        "temperature_2m_max",
-        "temperature_2m_min",
-        "weather_code",
-        "sunrise",
-        "sunset"
-      ].join(","),
-      timezone: "auto",
-      forecast_days: "4"
-    });
-    const url = `${baseUrl}?${params.toString()}`;
-
-    // --- Helpers ---
-    const WMO_CODES = {
-      // minimal mapping for demo; expand as you like
-      0: "Clear",
-      1: "Mainly clear",
-      2: "Partly cloudy",
-      3: "Overcast",
-      45: "Fog",
-      48: "Depositing rime fog",
-      51: "Drizzle: light",
-      53: "Drizzle: moderate",
-      55: "Drizzle: dense",
-      61: "Rain: slight",
-      63: "Rain: moderate",
-      65: "Rain: heavy",
-      71: "Snow fall: slight",
-      73: "Snow fall: moderate",
-      75: "Snow fall: heavy",
-      80: "Rain showers: slight",
-      81: "Rain showers: moderate",
-      82: "Rain showers: violent",
-      95: "Thunderstorm",
-      96: "Thunderstorm with hail",
-      99: "Thunderstorm with heavy hail"
+    // --- Firebase config (your project) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
+      authDomain: "fishing-log-app-murx.firebaseapp.com",
+      projectId: "fishing-log-app-murx",
+      storageBucket: "fishing-log-app-murx.firebasestorage.app",
+      messagingSenderId: "1056807867882",
+      appId: "1:1056807867882:web:e59ddd8f6353d190080e93",
+      measurementId: "G-J3EXD002RP"
     };
 
-    function fmtTimeLocal(iso) {
-      const d = new Date(iso);
-      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // --- DOM refs ---
+    const backBtn = document.getElementById("backBtn");
+    const spotNameEl = document.getElementById("spotName");
+    const spotSummaryEl = document.getElementById("spotSummary");
+    const speciesSelect = document.getElementById("speciesSelect");
+    const daysContainer = document.getElementById("daysContainer");
+    const hotTimesList = document.getElementById("hotTimesList");
+    const hotTimesInfoEl = document.getElementById("hotTimesInfo");
+    const debugOutputEl = document.getElementById("debugOutput");
+
+    backBtn.addEventListener("click", () => {
+      window.location.href = "index.html";
+    });
+
+    // --- Util helpers ---
+    const DAY_LABELS_SHORT = ["Sun.", "Mon.", "Tues.", "Wed.", "Thurs.", "Fri.", "Sat."];
+
+    function formatDateLabel(date) {
+      const d = new Date(date);
+      const dayLabel = DAY_LABELS_SHORT[d.getDay()];
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = d.getFullYear();
+      return `${dayLabel} ${dd}.${mm}.${yyyy}`;
     }
-    function fmtDateLocal(iso) {
-      const d = new Date(iso);
-      return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+
+    function formatShortDay(date) {
+      const d = new Date(date);
+      return DAY_LABELS_SHORT[d.getDay()];
     }
 
-    // --- Renderers ---
-    function renderForecast(daily) {
-      const holder = document.getElementById("forecast");
-      holder.innerHTML = "";
+    function safeRound(num, decimals = 0) {
+      if (num === null || num === undefined || isNaN(num)) return null;
+      const factor = Math.pow(10, decimals);
+      return Math.round(num * factor) / factor;
+    }
 
-      const count = Math.min(DAYS_TO_SHOW, daily.time.length);
-      for (let i = 0; i < count; i++) {
-        const date = daily.time[i];
-        const tMax = daily.temperature_2m_max[i];
-        const tMin = daily.temperature_2m_min[i];
-        const wmo = daily.weather_code[i];
-        const sunrise = daily.sunrise[i];
-        const sunset = daily.sunset[i];
+    function weatherCodeToText(code) {
+      const map = {
+        0: "Clear sky",
+        1: "Mainly clear",
+        2: "Partly cloudy",
+        3: "Overcast",
+        45: "Fog",
+        48: "Depositing rime fog",
+        51: "Light drizzle",
+        53: "Moderate drizzle",
+        55: "Dense drizzle",
+        61: "Slight rain",
+        63: "Moderate rain",
+        65: "Heavy rain",
+        71: "Slight snow",
+        73: "Moderate snow",
+        75: "Heavy snow",
+        80: "Slight rain showers",
+        81: "Moderate rain showers",
+        82: "Violent rain showers",
+        95: "Thunderstorm",
+        96: "Thunderstorm w/ slight hail",
+        99: "Thunderstorm w/ heavy hail"
+      };
+      return map[code] || "Unknown";
+    }
 
-        const card = document.createElement("div");
-        card.className = "card";
-        card.innerHTML = `
-          <h4>${fmtDateLocal(date)}</h4>
-          <p><strong>${tMax}° / ${tMin}°</strong></p>
-          <p>${WMO_CODES[wmo] ?? "Weather code " + wmo}</p>
-          <p>Sunrise: ${fmtTimeLocal(sunrise)} • Sunset: ${fmtTimeLocal(sunset)}</p>
-        `;
-        holder.appendChild(card);
+    function scoreToLabel(score) {
+      if (score >= 70) return { text: "Good", className: "badge-good" };
+      if (score >= 40) return { text: "Medium", className: "badge-medium" };
+      return { text: "Poor", className: "badge-poor" };
+    }
+
+    // --- Global state for this page ---
+    let currentUser = null;
+    let spot = null;
+    let allCatches = [];        // all catches at this spot
+    let hourlyForecast = null;  // Open-Meteo hourly
+    let dailyForecast = null;   // Open-Meteo daily
+
+    // --- Auth & initial loading ---
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
       }
-    }
+      currentUser = user;
 
-    function renderHotTimesTomorrow(daily) {
-      const el = document.getElementById("hot-times");
-      const tomorrowIndex = 1; // index 0 = today, 1 = tomorrow
-      if (daily.sunrise?.[tomorrowIndex] && daily.sunset?.[tomorrowIndex]) {
-        const sunriseIso = daily.sunrise[tomorrowIndex];
-        const sunsetIso = daily.sunset[tomorrowIndex];
-        const beforeSunrise = new Date(new Date(sunriseIso).getTime() - 60 * 60 * 1000);
-        const afterSunset = new Date(new Date(sunsetIso).getTime() + 60 * 60 * 1000);
-
-        el.innerHTML = `
-          <p><strong>${fmtDateLocal(daily.time[tomorrowIndex])}</strong></p>
-          <p>Start: ${beforeSunrise.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-          <p>End: ${afterSunset.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-        `;
-      } else {
-        el.textContent = "No sunrise/sunset data available.";
+      const url = new URL(window.location.href);
+      const spotId = url.searchParams.get("spotId");
+      if (!spotId) {
+        alert("Missing spotId in URL");
+        window.location.href = "index.html";
+        return;
       }
-    }
 
-    function renderDebug(json) {
-      const el = document.getElementById("debug");
-      el.textContent = JSON.stringify({
-        url,
-        latitude: json.latitude,
-        longitude: json.longitude,
-        timezone: json.timezone,
-        daily_units: json.daily_units,
-        sample_daily: json.daily?.time?.slice(0, 3)
-      }, null, 2);
-    }
-
-    // --- Fetch & render ---
-    (async function load() {
       try {
-        const res = await fetch(url, { mode: "cors" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        renderForecast(data.daily);
-        renderHotTimesTomorrow(data.daily);
-        renderDebug(data);
+        await loadSpotAndCatches(spotId);
+        setupSpeciesSelector();
+        await loadWeatherAndCompute("all");
       } catch (err) {
-        document.getElementById("forecast").innerHTML =
-          `<div class="card">API error: ${String(err)}</div>`;
-        document.getElementById("hot-times").innerHTML =
-          `Failed to load: ${String(err)}`;
-        document.getElementById("debug").textContent = String(err);
+        console.error(err);
+        spotNameEl.textContent = "Error loading predictions";
+        spotSummaryEl.textContent = String(err);
       }
-    })();
+    });
+
+    async function loadSpotAndCatches(spotId) {
+      const spotRef = doc(db, "users", currentUser.uid, "spots", spotId);
+      const snap = await getDoc(spotRef);
+      if (!snap.exists()) {
+        throw new Error("Fishing spot not found");
+      }
+      spot = { id: snap.id, ...snap.data() };
+
+      spotNameEl.textContent = spot.name || "Unnamed spot";
+
+      const catchesRef = collection(db, "users", currentUser.uid, "spots", spot.id, "catches");
+      const q = query(catchesRef, orderBy("timestamp", "asc"));
+      const catchSnap = await getDocs(q);
+      allCatches = catchSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const catchesWithWeather = allCatches.filter(c => c.weatherTemp != null && !isNaN(c.weatherTemp));
+      const total = allCatches.length;
+      const withWeather = catchesWithWeather.length;
+
+      spotSummaryEl.textContent =
+        total === 0
+          ? "No catches at this spot yet."
+          : `${total} total catches at this spot, ${withWeather} with weather data saved.`;
+    }
+
+    function setupSpeciesSelector() {
+      const speciesSet = new Set();
+      for (const c of allCatches) {
+        if (c.species) speciesSet.add(c.species);
+      }
+
+      speciesSelect.innerHTML = "";
+      const optAll = document.createElement("option");
+      optAll.value = "all";
+      optAll.textContent = "All species";
+      speciesSelect.appendChild(optAll);
+
+      [...speciesSet].sort().forEach(sp => {
+        const opt = document.createElement("option");
+        opt.value = sp;
+        opt.textContent = sp;
+        speciesSelect.appendChild(opt);
+      });
+
+      speciesSelect.addEventListener("change", async () => {
+        const value = speciesSelect.value;
+        await loadWeatherAndCompute(value);
+      });
+    }
+
+    // --- Open-Meteo FORECAST (fixed – no moon_phase) ---
+    async function fetchForecast(lat, lng) {
+      const params = new URLSearchParams({
+        latitude: lat,
+        longitude: lng,
+        timezone: "auto",
+        forecast_days: "4",
+        hourly: "temperature_2m,windspeed_10m,pressure_msl,weathercode,apparent_temperature",
+        daily: "temperature_2m_max,temperature_2m_min,sunrise,sunset"
+      });
+
+      const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Open-Meteo HTTP ${res.status}`);
+      }
+      return res.json();
+    }
+
+    async function loadWeatherAndCompute(speciesFilter) {
+      if (!spot || !spot.latitude || !spot.longitude) {
+        daysContainer.innerHTML = "<p>Missing GPS for this spot – cannot compute predictions.</p>";
+        hotTimesList.innerHTML = "";
+        hotTimesInfoEl.textContent = "";
+        return;
+      }
+
+      // Filter catches by species (and require weather data)
+      const catchesForCalc = allCatches.filter(c => {
+        if (speciesFilter !== "all" && c.species !== speciesFilter) return false;
+        return (
+          c.weatherTemp != null &&
+          !isNaN(c.weatherTemp) &&
+          c.weatherWindMs != null &&
+          !isNaN(c.weatherWindMs) &&
+          c.weatherPressure != null &&
+          !isNaN(c.weatherPressure)
+        );
+      });
+
+      if (catchesForCalc.length === 0) {
+        daysContainer.innerHTML =
+          `<p>No catches with weather data for this selection yet.</p>`;
+        hotTimesList.innerHTML = "";
+        hotTimesInfoEl.textContent = "";
+        debugOutputEl.textContent = "No catches with weather data for this species selection.";
+        return;
+      }
+
+      daysContainer.innerHTML = "<p>Loading forecast…</p>";
+      hotTimesList.innerHTML = "";
+      hotTimesInfoEl.textContent = "";
+      debugOutputEl.textContent = "Loading Open-Meteo forecast…";
+
+      try {
+        const forecastJson = await fetchForecast(spot.latitude, spot.longitude);
+        hourlyForecast = forecastJson.hourly;
+        dailyForecast = forecastJson.daily;
+        computePredictionsFromForecast(catchesForCalc);
+      } catch (err) {
+        console.error("Forecast error:", err);
+        daysContainer.innerHTML =
+          `<p>Weather error: ${err.message || err}</p>`;
+        hotTimesList.innerHTML = "";
+        hotTimesInfoEl.textContent = "";
+        debugOutputEl.textContent =
+          "Failed to load Open-Meteo forecast: " + (err.message || err);
+      }
+    }
+
+    // --- Prediction calculation ---
+    function computePredictionsFromForecast(catchesForCalc) {
+      if (!hourlyForecast || !dailyForecast) {
+        daysContainer.innerHTML = "<p>Forecast missing.</p>";
+        return;
+      }
+
+      // Build 3 days (tomorrow + 2) from daily forecast
+      const dailyTimes = dailyForecast.time;
+      const maxT = dailyForecast.temperature_2m_max;
+      const minT = dailyForecast.temperature_2m_min;
+      const sunriseArr = dailyForecast.sunrise;
+      const sunsetArr = dailyForecast.sunset;
+
+      const forecastDays = [];
+      for (let i = 1; i <= 3 && i < dailyTimes.length; i++) {
+        const dateIso = dailyTimes[i];
+        forecastDays.push({
+          index: i,
+          date: new Date(dateIso),
+          maxTemp: maxT[i],
+          minTemp: minT[i],
+          sunrise: sunriseArr[i],
+          sunset: sunsetArr[i],
+          // moonPhaseFraction: null  // we no longer get moon phase from API
+        });
+      }
+
+      // Preprocessing for catches: group by day-of-year and local hour
+      const catchesWithWeather = catchesForCalc.map(c => ({
+        ...c,
+        date: new Date(c.timestamp),
+        temp: Number(c.weatherTemp),
+        wind: Number(c.weatherWindMs),
+        pressure: Number(c.weatherPressure)
+      }));
+
+      // Current weather from first hourly entry (approximate "now")
+      const hourTimes = hourlyForecast.time.map(t => new Date(t));
+      const tempArr = hourlyForecast.temperature_2m;
+      const windArr = hourlyForecast.windspeed_10m;
+      const pressureArr = hourlyForecast.pressure_msl;
+      const codeArr = hourlyForecast.weathercode;
+
+      const nowIdx = 0; // first hour of forecast (today 00:00 local) – still illustrative
+      const nowTemp = safeRound(tempArr[nowIdx], 1);
+      const nowWind = safeRound(windArr[nowIdx], 1);
+      const nowPress = safeRound(pressureArr[nowIdx], 1);
+      const nowCode = codeArr[nowIdx];
+      const nowText = weatherCodeToText(nowCode);
+
+      // --- Compute daily scores ---
+      const debugLines = [];
+      const dayScores = [];
+
+      for (const fd of forecastDays) {
+        const meanTempForecast = (fd.maxTemp + fd.minTemp) / 2;
+        const forecastPressure = safeRound(
+          dailyForecast.mean_sea_level_pressure
+            ? dailyForecast.mean_sea_level_pressure[fd.index]
+            : null,
+          1
+        );
+
+        let rawScore = 0;
+        let matches = 0;
+
+        for (const c of catchesWithWeather) {
+          // Temp differences
+          const tempDiff = Math.abs(meanTempForecast - c.temp);
+          const tempTolerance = 5; // user requested ±5°C
+          let tempPenalty = 0;
+          if (tempDiff <= tempTolerance) tempPenalty = 0;
+          else tempPenalty = (tempDiff - tempTolerance) * 2;
+
+          // Wind differences
+          const windDiff = Math.abs(
+            safeRound( (dailyForecast.wind_speed_10m_max
+              ? dailyForecast.wind_speed_10m_max[fd.index]
+              : windArr[nowIdx] ), 1) - c.wind
+          );
+          const windTolerance = 4; // user requested ±4 m/s
+          let windPenalty = 0;
+          if (windDiff <= windTolerance) windPenalty = 0;
+          else windPenalty = (windDiff - windTolerance) * 3;
+
+          // Pressure logic (user custom rule)
+          let pressurePenalty = 0;
+          if (forecastPressure != null && !isNaN(forecastPressure)) {
+            const isForecastLow = forecastPressure < 1000;
+            const isCatchLow = c.pressure < 1000;
+            if (isForecastLow !== isCatchLow) {
+              // mismatch
+              pressurePenalty = 8;
+            }
+          }
+
+          const penalties = tempPenalty + windPenalty + pressurePenalty;
+          const score = Math.max(0, 100 - penalties);
+          rawScore += score;
+          matches++;
+        }
+
+        const avgScore = matches > 0 ? rawScore / matches : 0;
+        dayScores.push({
+          date: fd.date,
+          score: avgScore,
+          matches,
+          forecastPressure
+        });
+
+        debugLines.push(
+          `${formatDateLabel(fd.date)} – rawScore=${avgScore.toFixed(2)},` +
+          ` matches=${matches}, forecastPressure=${forecastPressure ?? "n/a"} hPa`
+        );
+      }
+
+      // Render "Next 3 days"
+      daysContainer.innerHTML = "";
+      if (dayScores.length === 0) {
+        daysContainer.innerHTML = "<p>No forecast days available.</p>";
+      } else {
+        for (const ds of dayScores) {
+          const label = scoreToLabel(ds.score);
+          const row = document.createElement("div");
+          row.className = "list-row";
+
+          const left = document.createElement("div");
+          left.className = "list-row-main";
+          left.textContent = formatDateLabel(ds.date);
+
+          const right = document.createElement("div");
+          right.className = "list-row-meta";
+
+          const scoreSpan = document.createElement("span");
+          scoreSpan.textContent = `${Math.round(ds.score)}%`;
+          scoreSpan.className = `badge ${label.className}`;
+
+          right.appendChild(scoreSpan);
+          row.appendChild(left);
+          row.appendChild(right);
+          daysContainer.appendChild(row);
+        }
+
+        const avg3 =
+          dayScores.reduce((sum, d) => sum + d.score, 0) / dayScores.length;
+        const totalMatches = dayScores.reduce(
+          (sum, d) => sum + d.matches,
+          0
+        );
+        const footer = document.createElement("p");
+        footer.className = "card-subtitle";
+        footer.textContent =
+          `Average score for the next 3 days: ${Math.round(
+            avg3
+          )}% (based on ${totalMatches} catches with weather data).`;
+        daysContainer.appendChild(footer);
+      }
+
+      // --- Hot times tomorrow (same logic as before) ---
+      const tomorrow = forecastDays[0];
+      if (!tomorrow || !tomorrow.sunrise || !tomorrow.sunset) {
+        hotTimesList.innerHTML = "";
+        hotTimesInfoEl.textContent = "No sunrise/sunset info available.";
+      } else {
+        const sunrise = new Date(tomorrow.sunrise);
+        const sunset = new Date(tomorrow.sunset);
+
+        const windowStart = new Date(sunrise.getTime() - 60 * 60 * 1000);
+        const windowEnd = new Date(sunset.getTime() + 60 * 60 * 1000);
+
+        const hours = [];
+        const d = new Date(windowStart);
+        while (d <= windowEnd) {
+          hours.push(new Date(d));
+          d.setHours(d.getHours() + 1);
+        }
+
+        hotTimesList.innerHTML = "";
+        for (const h of hours) {
+          const li = document.createElement("li");
+          li.className = "list-row";
+
+          const hh = String(h.getHours()).padStart(2, "0");
+          const mm = String(h.getMinutes()).padStart(2, "0");
+
+          li.textContent = `${hh}:${mm}`;
+          hotTimesList.appendChild(li);
+        }
+
+        hotTimesInfoEl.textContent =
+          "Times are between 1 hour before sunrise and 1 hour after sunset, " +
+          "based on your catches with weather data.";
+
+      }
+
+      // --- Debug output ---
+      const debugLinesHeader = [];
+
+      debugLinesHeader.push(
+        `Weather now (approx.): ${nowText}, ${nowTemp} °C, wind ${nowWind} m/s, ` +
+        `${nowPress} hPa`
+      );
+      debugLinesHeader.push(
+        "Moon phase is currently **ignored for the forecast** (Open-Meteo " +
+        "forecast endpoint no longer exposes daily moon_phase)."
+      );
+      debugLinesHeader.push("");
+
+      debugOutputEl.textContent =
+        debugLinesHeader.join("\n") + debugLines.join("\n");
+    }
   </script>
 </body>
 </html>
