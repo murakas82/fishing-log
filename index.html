@@ -4,97 +4,51 @@
   <meta charset="UTF-8" />
   <title>My Fishing Log</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <link rel="preconnect" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://www.googleapis.com">
-
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
   <div class="app fade-in">
-    <header>
-      <h1>My Fishing Log</h1>
-      <p>Track your catches anywhere – with login & cloud sync.</p>
+    <header class="card">
+      <div class="card-header">
+        <div>
+          <h1>My Fishing Log</h1>
+          <p class="muted-text">
+            Track your catches anywhere – with login, spots, weather & predictions.
+          </p>
+        </div>
+        <div id="authArea">
+          <!-- Filled by JS -->
+        </div>
+      </div>
     </header>
 
-    <!-- GLOBAL LOADING -->
-    <div id="loadingCard" class="loading-spinner-wrapper">
-      <div class="loading-spinner"></div>
+    <!-- Stats -->
+    <div class="card" id="statsCard" style="display:none;">
+      <h2>Stats</h2>
+      <div id="statsContent" class="stat-badges"></div>
     </div>
 
-    <!-- AUTH CARD (email/password only) -->
-    <div class="card" id="authCard" style="display:none;">
-      <h2>Log in or sign up</h2>
-
-      <label for="authEmail">Email</label>
-      <input id="authEmail" type="email" autocomplete="email" />
-
-      <label for="authPassword">Password</label>
-      <input id="authPassword" type="password" autocomplete="current-password" />
-
-      <div class="auth-buttons">
-        <button id="loginBtn">Log in</button>
-        <button id="signupBtn" class="secondary-btn">Sign up</button>
-      </div>
-
-      <p id="authMessage" class="auth-message"></p>
-    </div>
-
-    <!-- USER CARD + SETTINGS BUTTON -->
-    <div class="card" id="userCard" style="display:none;">
-      <div class="user-row">
-        <div>
-          <div class="user-label">Logged in as</div>
-          <div class="user-email" id="userDisplayName"></div>
-        </div>
-        <div class="user-actions">
-          <button id="settingsBtn" class="secondary-btn">Settings</button>
-          <button id="logoutBtn" class="secondary-btn">Log out</button>
+    <!-- My fishing spots -->
+    <div class="card" id="spotsCard" style="display:none;">
+      <div class="card-header">
+        <h2>My fishing spots</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="secondary-btn" id="mapViewBtn">Map view</button>
+          <button class="secondary-btn" id="addSpotBtn">Add new spot</button>
         </div>
       </div>
+      <div id="spotsList"></div>
     </div>
 
-    <!-- SETTINGS CARD -->
-    <div class="card" id="settingsCard" style="display:none;">
-      <h2>Settings</h2>
-
-      <label for="displayNameInput">Display name</label>
-      <input id="displayNameInput" type="text" placeholder="Your name" />
-
-      <div class="auth-buttons">
-        <button id="saveSettingsBtn">Save</button>
-        <button id="cancelSettingsBtn" class="secondary-btn">Cancel</button>
-      </div>
-
-      <p id="settingsMessage" class="auth-message"></p>
-    </div>
-
-    <!-- MAIN CONTENT -->
-    <div id="appContent" style="display:none;">
-
-      <!-- GLOBAL STATS -->
-      <div class="card">
-        <h2>Stats</h2>
-        <div id="stats" class="stats-container"></div>
-      </div>
-
-      <!-- FISHING SPOTS -->
-      <div class="card">
-        <div class="spots-header-row">
-          <h2>My fishing spots</h2>
-          <div class="spots-header-actions">
-            <button id="goMapViewBtn" class="tiny-secondary-btn">Map view</button>
-            <button id="goAddSpotBtn" class="tiny-secondary-btn">Add new spot</button>
-          </div>
-        </div>
-
-        <div id="spotsContainer" class="spots-container"></div>
+    <!-- Loading state before auth resolved -->
+    <div class="card" id="loadingCard">
+      <div class="loading-center">
+        <div class="spinner"></div>
+        <div>Loading app…</div>
       </div>
     </div>
   </div>
 
-  <!-- FIREBASE + APP LOGIC -->
   <script type="module">
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -109,12 +63,15 @@
 
     import {
       getFirestore,
-      collection, getDocs,
-      query, where,
-      doc, getDoc, setDoc
+      doc,
+      getDoc,
+      setDoc,
+      collection,
+      getDocs,
+      query,
+      where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    /* FIREBASE CONFIG (your project) */
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -128,343 +85,259 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    /* DOM REFS */
-    const loadingCard      = document.getElementById("loadingCard");
-    const authCard         = document.getElementById("authCard");
-    const userCard         = document.getElementById("userCard");
-    const appContent       = document.getElementById("appContent");
-    const displayNameEl    = document.getElementById("userDisplayName");
+    const authArea     = document.getElementById("authArea");
+    const loadingCard  = document.getElementById("loadingCard");
+    const statsCard    = document.getElementById("statsCard");
+    const statsContent = document.getElementById("statsContent");
+    const spotsCard    = document.getElementById("spotsCard");
+    const spotsList    = document.getElementById("spotsList");
+    const mapViewBtn   = document.getElementById("mapViewBtn");
+    const addSpotBtn   = document.getElementById("addSpotBtn");
 
-    const emailEl          = document.getElementById("authEmail");
-    const passEl           = document.getElementById("authPassword");
-    const authMsgEl        = document.getElementById("authMessage");
+    function renderAuthForm(errorMessage = "") {
+      authArea.innerHTML = `
+        <div>
+          <form id="authForm" style="display:flex;flex-direction:column;gap:6px;min-width:260px;">
+            <div style="font-size:0.85rem;">Log in or sign up</div>
+            <input type="email" id="authEmail" placeholder="Email" required />
+            <input type="password" id="authPassword" placeholder="Password" required />
+            <div style="display:flex;gap:8px;">
+              <button type="submit" class="primary-btn" data-mode="login">Log in</button>
+              <button type="button" class="secondary-btn" id="signUpBtn">Sign up</button>
+            </div>
+            <div id="authError" class="muted-text" style="color:#f97373;">${errorMessage}</div>
+          </form>
+        </div>
+      `;
 
-    const settingsCard     = document.getElementById("settingsCard");
-    const settingsBtn      = document.getElementById("settingsBtn");
-    const saveSettingsBtn  = document.getElementById("saveSettingsBtn");
-    const cancelSettingsBtn= document.getElementById("cancelSettingsBtn");
-    const displayNameInput = document.getElementById("displayNameInput");
-    const settingsMessage  = document.getElementById("settingsMessage");
+      const form = document.getElementById("authForm");
+      const signUpBtn = document.getElementById("signUpBtn");
 
-    const goAddSpotBtn     = document.getElementById("goAddSpotBtn");
-    const goMapViewBtn     = document.getElementById("goMapViewBtn");
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("authEmail").value.trim();
+        const pass  = document.getElementById("authPassword").value.trim();
+        try {
+          await signInWithEmailAndPassword(auth, email, pass);
+        } catch (err) {
+          renderAuthForm("Login failed: " + (err.code || err.message));
+        }
+      };
 
-    let currentUser = null;
-    let catches = [];
-    let spots   = [];
-    let currentUserEmail = "";
+      signUpBtn.onclick = async () => {
+        const email = document.getElementById("authEmail").value.trim();
+        const pass  = document.getElementById("authPassword").value.trim();
+        if (!email || !pass) {
+          renderAuthForm("Enter email & password, then press Sign up.");
+          return;
+        }
+        try {
+          await createUserWithEmailAndPassword(auth, email, pass);
+        } catch (err) {
+          renderAuthForm("Sign up failed: " + (err.code || err.message));
+        }
+      };
+    }
 
-    /* ---------------- AUTH BUTTONS ---------------- */
+    function renderLoggedInHeader(user, displayName) {
+      const nameText = displayName || user.email || "Unknown user";
 
-    document.getElementById("loginBtn").onclick = async () => {
-      authMsgEl.textContent = "";
-      try {
-        await signInWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) {
-        authMsgEl.textContent = err.message;
-      }
-    };
+      authArea.innerHTML = `
+        <div style="text-align:right;display:flex;flex-direction:column;gap:4px;">
+          <div style="font-size:0.86rem;">
+            Logged in as <strong>${nameText}</strong>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+            <button class="secondary-btn" id="settingsBtn">Settings</button>
+            <button class="secondary-btn btn-back-main" id="logoutBtn">← Back to main</button>
+          </div>
+        </div>
+      `;
 
-    document.getElementById("signupBtn").onclick = async () => {
-      authMsgEl.textContent = "";
-      try {
-        await createUserWithEmailAndPassword(auth, emailEl.value, passEl.value);
-      } catch (err) {
-        authMsgEl.textContent = err.message;
-      }
-    };
+      const logoutBtn = document.getElementById("logoutBtn");
+      const settingsBtn = document.getElementById("settingsBtn");
 
-    document.getElementById("logoutBtn").onclick = () => signOut(auth);
+      logoutBtn.onclick = () => signOut(auth);
+      settingsBtn.onclick = () => {
+        window.location.href = "settings.html";
+      };
+    }
 
-    goAddSpotBtn.onclick = () => window.location.href = "add-spot.html";
-    goMapViewBtn.onclick = () => window.location.href = "spots-map.html";
+    async function loadUserDisplayName(userId) {
+      const profileRef = doc(db, "profiles", userId);
+      const snap = await getDoc(profileRef);
+      if (!snap.exists()) return null;
+      return snap.data().displayName || null;
+    }
 
-    /* ---------------- SETTINGS ---------------- */
-
-    settingsBtn.onclick = () => {
-      if (!currentUser) return;
-      settingsMessage.textContent = "";
-      settingsCard.style.display = "block";
-      displayNameInput.value = displayNameEl.textContent || currentUserEmail || "";
-    };
-
-    cancelSettingsBtn.onclick = () => {
-      settingsCard.style.display = "none";
-      settingsMessage.textContent = "";
-    };
-
-    saveSettingsBtn.onclick = async () => {
-      if (!currentUser) return;
-      const name = displayNameInput.value.trim();
-      if (!name) {
-        settingsMessage.textContent = "Please enter a display name.";
+    async function loadStats(user) {
+      const q = query(
+        collection(db, "catches"),
+        where("userId", "==", user.uid)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        statsContent.innerHTML = `<div class="muted-text">No catches yet.</div>`;
         return;
       }
 
-      try {
-        const userDocRef = doc(db, "users", currentUser.uid);
-        await setDoc(userDocRef, { displayName: name }, { merge: true });
-        displayNameEl.textContent = name;
-        settingsMessage.textContent = "Saved!";
-        setTimeout(() => {
-          settingsCard.style.display = "none";
-          settingsMessage.textContent = "";
-        }, 600);
-      } catch (err) {
-        console.error(err);
-        settingsMessage.textContent = "Failed to save settings.";
-      }
-    };
+      let total = 0;
+      let totalWeight = 0;
+      let biggestWeight = 0;
+      let biggestSpecies = "-";
 
-    async function loadUserProfile(user) {
-      currentUserEmail = user.email || "";
-      let displayName = "";
-
-      try {
-        const userDocRef = doc(db, "users", user.uid);
-        const snap = await getDoc(userDocRef);
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.displayName) displayName = data.displayName;
+      snap.forEach(docSnap => {
+        const c = docSnap.data();
+        total += 1;
+        if (typeof c.weightKg === "number" && !isNaN(c.weightKg)) {
+          totalWeight += c.weightKg;
+          if (c.weightKg > biggestWeight) {
+            biggestWeight = c.weightKg;
+            biggestSpecies = c.species || "-";
+          }
         }
-      } catch (err) {
-        console.error("Error loading user profile:", err);
-      }
+      });
 
-      displayNameEl.textContent = displayName || currentUserEmail;
-    }
+      const avgWeight = totalWeight && total ? (totalWeight / total) : 0;
 
-    /* ---------------- AUTH STATE ---------------- */
-
-    onAuthStateChanged(auth, async (user) => {
-      currentUser = user;
-      loadingCard.style.display = "none";
-
-      if (user) {
-        authCard.style.display   = "none";
-        userCard.style.display   = "block";
-        appContent.style.display = "block";
-
-        await loadUserProfile(user);
-
-        showStatsLoading();
-        await Promise.all([loadCatches(), loadSpots()]);
-        renderStats();
-        renderSpots();
-      } else {
-        authCard.style.display   = "block";
-        userCard.style.display   = "none";
-        appContent.style.display = "none";
-        settingsCard.style.display = "none";
-      }
-    });
-
-    /* ---------------- DATA LOAD ---------------- */
-
-    async function loadCatches() {
-      const q = query(collection(db, "catches"), where("userId", "==", currentUser.uid));
-      const snap = await getDocs(q);
-      catches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    }
-
-    async function loadSpots() {
-      const q = query(collection(db, "spots"), where("userId", "==", currentUser.uid));
-      const snap = await getDocs(q);
-      spots = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    }
-
-    /* ---------------- STATS ---------------- */
-
-    function showStatsLoading() {
-      const statsEl = document.getElementById("stats");
-      if (!statsEl) return;
-      statsEl.innerHTML = `
-        <div class="loading-spinner-wrapper section-loading">
-          <div class="loading-spinner"></div>
-        </div>
+      statsContent.innerHTML = `
+        <span class="stat-pill">Total catches <strong>${total}</strong></span>
+        <span class="stat-pill">Biggest fish <strong>${biggestWeight.toFixed(2)} kg ${biggestSpecies}</strong></span>
+        <span class="stat-pill">Average weight <strong>${avgWeight.toFixed(2)} kg</strong></span>
       `;
     }
 
-    function renderStats() {
-      const statsEl = document.getElementById("stats");
-      statsEl.innerHTML = "";
+    async function loadSpots(user) {
+      const q = query(
+        collection(db, "spots"),
+        where("userId", "==", user.uid)
+      );
+      const snap = await getDocs(q);
 
-      if (!catches.length) {
-        statsEl.innerHTML = `<p class="empty-state">No stats yet – add your first catch!</p>`;
+      if (snap.empty) {
+        spotsList.innerHTML = `<p class="muted-text">No spots yet. Add your first fishing spot.</p>`;
         return;
       }
 
-      const total = catches.length;
-      let biggest = catches[0];
-      let sum = 0;
+      const spots = [];
+      snap.forEach(docSnap => spots.push({ id: docSnap.id, ...docSnap.data() }));
 
-      catches.forEach(c => {
-        const w = Number(c.weightKg) || 0;
-        sum += w;
-        if (w > Number(biggest.weightKg || 0)) biggest = c;
-      });
+      // For each spot, load catches for stats (simple, not heavily optimised)
+      const catchesSnap = await getDocs(
+        query(collection(db, "catches"), where("userId", "==", user.uid))
+      );
+      const allCatches = catchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      const avg = sum / total;
+      spotsList.innerHTML = "";
+      for (const spot of spots) {
+        const spotDiv = document.createElement("div");
+        spotDiv.className = "spot-row";
 
-      const container = document.createElement("div");
+        const spotCatches = allCatches.filter(c => c.spotId === spot.id);
+        const total = spotCatches.length;
+        let biggestWeight = 0;
+        let biggestSpecies = "-";
 
-      const pill = (label, value) => {
-        const div = document.createElement("div");
-        div.className = "stat-pill";
-        div.innerHTML = `
-          <span class="stat-label">${label}</span>
-          <span class="stat-value">${value}</span>
-        `;
-        container.appendChild(div);
-      };
-
-      pill("Total catches", total);
-      pill("Biggest fish", `${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`);
-      pill("Average weight", `${avg.toFixed(2)} kg`);
-
-      statsEl.appendChild(container);
-    }
-
-    /* ---------------- WEATHER HELPER ---------------- */
-
-    function getWeatherIconAndLabel(code) {
-      if (code === 0) return { icon: "☀️", label: "Clear sky" };
-      if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
-      if (code === 2) return { icon: "⛅", label: "Partly cloudy" };
-      if (code === 3) return { icon: "☁️", label: "Overcast" };
-      if (code === 45 || code === 48) return { icon: "🌫️", label: "Fog" };
-      if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Drizzle" };
-      if (code >= 61 && code <= 67) return { icon: "🌧️", label: "Rain" };
-      if (code >= 71 && code <= 77) return { icon: "🌨️", label: "Snow" };
-      if (code >= 80 && code <= 82) return { icon: "🌦️", label: "Rain showers" };
-      if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Snow showers" };
-      if (code === 95) return { icon: "⛈️", label: "Thunderstorm" };
-      if (code === 96 || code === 99) return { icon: "⛈️", label: "Thunderstorm with hail" };
-      return { icon: "❓", label: "Unknown weather" };
-    }
-
-    async function fetchWeatherForSpot(lat, lng, el) {
-      try {
-        el.textContent = "Weather: loading…";
-
-        const url =
-          `https://api.open-meteo.com/v1/forecast` +
-          `?latitude=${lat}&longitude=${lng}` +
-          `&current_weather=true`;
-
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Open-Meteo error");
-
-        const data = await res.json();
-        const cw = data.current_weather || {};
-
-        const temp    = typeof cw.temperature === "number" ? cw.temperature : null;
-        const windKmh = typeof cw.windspeed === "number" ? cw.windspeed : null;
-        const windMs  = windKmh != null ? windKmh / 3.6 : null;
-        const code    = cw.weathercode;
-
-        const { icon, label } = getWeatherIconAndLabel(code);
-
-        const parts = [];
-        if (label)          parts.push(label);
-        if (temp != null)   parts.push(`${temp.toFixed(1)} °C`);
-        if (windMs != null) parts.push(`wind ${windMs.toFixed(1)} m/s`);
-
-        const text = parts.join(", ");
-
-        el.textContent = text
-          ? `Weather now: ${icon} ${text}`
-          : "Weather: not available";
-      } catch (err) {
-        console.error(err);
-        el.textContent = "Weather: failed to load";
-      }
-    }
-
-    /* ---------------- SPOTS ---------------- */
-
-    function renderSpots() {
-      const spotsEl = document.getElementById("spotsContainer");
-      spotsEl.innerHTML = "";
-
-      if (!spots.length) {
-        spotsEl.innerHTML = `<p class="empty-state">No fishing spots yet.</p>`;
-        return;
-      }
-
-      spots
-        .slice()
-        .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-        .forEach(spot => {
-          const spotCatches = catches.filter(c => c.spotId === spot.id);
-
-          let statsLine = "No catches yet";
-          if (spotCatches.length) {
-            let biggest = spotCatches[0];
-            spotCatches.forEach(c => {
-              if (Number(c.weightKg) > Number(biggest.weightKg)) {
-                biggest = c;
-              }
-            });
-            statsLine =
-              `Total catches: ${spotCatches.length} • ` +
-              `Biggest: ${Number(biggest.weightKg).toFixed(2)} kg ${biggest.species}`;
+        spotCatches.forEach(c => {
+          if (typeof c.weightKg === "number" && !isNaN(c.weightKg)) {
+            if (c.weightKg > biggestWeight) {
+              biggestWeight = c.weightKg;
+              biggestSpecies = c.species || "-";
+            }
           }
-
-          const hasCoords =
-            typeof spot.latitude === "number" &&
-            typeof spot.longitude === "number";
-
-          const mapsLink = hasCoords
-            ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
-            : "";
-
-          const block = document.createElement("div");
-          block.className = "spot-block";
-
-          block.innerHTML = `
-            <div class="spot-header">
-              <div class="spot-name-buttons">
-                <a class="tiny-secondary-btn"
-                   href="spot.html?id=${encodeURIComponent(spot.id)}">
-                   ${spot.name}
-                </a>
-                <a class="tiny-secondary-btn"
-                   href="add-catch.html?spotId=${encodeURIComponent(spot.id)}">
-                   Add catch
-                </a>
-              </div>
-            </div>
-
-            <div class="spot-stats">${statsLine}</div>
-            <div class="spot-weather"></div>
-
-            <div class="spot-actions-row" style="margin-top:4px;">
-              <a class="tiny-secondary-btn"
-                 href="predictions.html?spotId=${encodeURIComponent(spot.id)}">
-                 Predictions (next 3 days)
-              </a>
-              ${
-                hasCoords
-                  ? `<a class="tiny-secondary-btn"
-                       href="${mapsLink}" target="_blank">
-                       Google Maps
-                     </a>`
-                  : ""
-              }
-            </div>
-          `;
-
-          const weatherEl = block.querySelector(".spot-weather");
-          if (hasCoords) {
-            fetchWeatherForSpot(spot.latitude, spot.longitude, weatherEl);
-          } else {
-            weatherEl.textContent = "Weather: no GPS for this spot";
-          }
-
-          spotsEl.appendChild(block);
         });
+
+        const statsLine = total
+          ? `Total catches: ${total} • Biggest: ${biggestWeight.toFixed(2)} kg ${biggestSpecies}`
+          : "No catches yet.";
+
+        const mapsUrl =
+          typeof spot.latitude === "number" && typeof spot.longitude === "number"
+            ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
+            : null;
+
+        spotDiv.innerHTML = `
+          <div class="spot-header-line">
+            <h3>${spot.name || "Unnamed spot"}</h3>
+            <span class="muted-text">${total} catches</span>
+          </div>
+          <div class="muted-text">${statsLine}</div>
+        `;
+
+        const actionsDiv = document.createElement("div");
+        actionsDiv.className = "spot-actions";
+
+        const openBtn = document.createElement("button");
+        openBtn.className = "secondary-btn";
+        openBtn.textContent = "Open spot";
+        openBtn.onclick = () => {
+          window.location.href = `spot.html?id=${encodeURIComponent(spot.id)}`;
+        };
+
+        const addCatchBtn = document.createElement("button");
+        addCatchBtn.className = "secondary-btn";
+        addCatchBtn.textContent = "Add catch";
+        addCatchBtn.onclick = () => {
+          window.location.href = `add-catch.html?spotId=${encodeURIComponent(
+            spot.id
+          )}`;
+        };
+
+        const predBtn = document.createElement("button");
+        predBtn.className = "secondary-btn";
+        predBtn.textContent = "Predictions";
+        predBtn.onclick = () => {
+          window.location.href = `predictions.html?spotId=${encodeURIComponent(
+            spot.id
+          )}`;
+        };
+
+        actionsDiv.appendChild(openBtn);
+        actionsDiv.appendChild(addCatchBtn);
+        actionsDiv.appendChild(predBtn);
+
+        if (mapsUrl) {
+          const mapsBtn = document.createElement("a");
+          mapsBtn.className = "secondary-btn";
+          mapsBtn.href = mapsUrl;
+          mapsBtn.target = "_blank";
+          mapsBtn.rel = "noopener noreferrer";
+          mapsBtn.textContent = "Google Maps";
+          actionsDiv.appendChild(mapsBtn);
+        }
+
+        spotDiv.appendChild(actionsDiv);
+        spotsList.appendChild(spotDiv);
+      }
     }
+
+    onAuthStateChanged(auth, async (user) => {
+      loadingCard.style.display = "none";
+
+      if (!user) {
+        statsCard.style.display = "none";
+        spotsCard.style.display = "none";
+        renderAuthForm();
+        return;
+      }
+
+      const displayName = await loadUserDisplayName(user.uid);
+      renderLoggedInHeader(user, displayName);
+
+      statsCard.style.display = "block";
+      spotsCard.style.display = "block";
+
+      await loadStats(user);
+      await loadSpots(user);
+    });
+
+    mapViewBtn.onclick = () => {
+      window.location.href = "spots-map.html";
+    };
+
+    addSpotBtn.onclick = () => {
+      window.location.href = "add-spot.html";
+    };
   </script>
 </body>
 </html>
