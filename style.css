@@ -189,9 +189,7 @@ button:active {
   display: inline-flex;
   flex-direction: column;
   padding: 8px 12px;
-  border-radius: 999px;
   background: rgba(15,23,42,0.9);
-  border: 1px solid rgba(148,163,184,0.5);
   margin-right: 8px;
   margin-top: 6px;
 }
@@ -355,5 +353,6 @@ textarea {
   min-height: 80px;
   resize: vertical;
 }
+
 
 
