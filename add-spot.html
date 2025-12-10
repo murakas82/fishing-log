@@ -24,29 +24,107 @@
       overflow: hidden;
     }
 
-    /* Search area above map */
+    /* Search + map row */
     .map-search-row {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-      align-items: center;
+      align-items: flex-start;
       margin-top: 8px;
     }
 
-    /* Match Spot Name input style, but keep pill shape */
-    .map-search-input {
+    .map-search-wrapper {
+      position: relative;
       flex: 1;
-      min-width: 180px;
+      min-width: 220px;
+    }
+
+    /* Match Spot Name input styling, but pill-shaped */
+    .map-search-input {
+      width: 100%;
       padding: 12px 16px;
-      border-radius: 9999px;        /* pill shape */
-      border: 1px solid #1e293b;    /* same border as other inputs */
-      background: #020617;          /* same dark input background */
-      color: #e5e7eb;               /* same text color */
+      padding-left: 40px;         /* space for 🔍 */
+      padding-right: 40px;        /* space for ✕ */
+      border-radius: 9999px;      /* pill */
+      background: #0f172a;        /* same as inputs */
+      border: 1px solid #1e293b;  /* same border */
+      color: #e5e7eb;             /* same text color */
       font-size: 16px;
     }
 
     .map-search-input::placeholder {
-      color: #6b7280;               /* same placeholder color */
+      color: #64748b;             /* same placeholder color */
+    }
+
+    /* Magnifying glass icon inside bar */
+    .map-search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      font-size: 16px;
+      opacity: 0.8;
+    }
+
+    /* Clear (X) button inside bar */
+    .map-search-clear {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: none;
+      background: transparent;
+      color: #9ca3af;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0;
+      display: none; /* shown only when input has text */
+    }
+
+    .map-search-clear:hover {
+      color: #e5e7eb;
+    }
+
+    /* Suggestions dropdown */
+    .map-search-suggestions {
+      position: absolute;
+      z-index: 1000;
+      margin-top: 4px;
+      width: 100%;
+      list-style: none;
+      padding: 4px 0;
+      border-radius: 12px;
+      background: #020617;
+      border: 1px solid #1e293b;
+      max-height: 220px;
+      overflow-y: auto;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.6);
+    }
+
+    .map-search-suggestions li {
+      padding: 8px 12px;
+      font-size: 14px;
+      color: #e5e7eb;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(15,23,42,0.9);
+    }
+
+    .map-search-suggestions li:last-child {
+      border-bottom: none;
+    }
+
+    .map-search-suggestions li:hover {
+      background: #111827;
+    }
+
+    .map-search-suggestions .suggestion-main {
+      font-weight: 500;
+    }
+
+    .map-search-suggestions .suggestion-sub {
+      font-size: 12px;
+      color: #9ca3af;
     }
   </style>
 </head>
@@ -103,12 +181,17 @@
 
       <!-- Search + map -->
       <div class="map-search-row">
-        <input
-          id="mapSearchInput"
-          class="map-search-input"
-          type="text"
-          placeholder="Search place (town, lake, address, etc.)"
-        />
+        <div class="map-search-wrapper">
+          <span class="map-search-icon">🔍</span>
+          <input
+            id="mapSearchInput"
+            class="map-search-input"
+            type="text"
+            placeholder="Search place (town, lake, address, etc.)"
+          />
+          <button type="button" class="map-search-clear" id="mapSearchClearBtn">✕</button>
+          <ul id="mapSearchSuggestions" class="map-search-suggestions" style="display:none;"></ul>
+        </div>
         <button class="secondary-btn" id="mapSearchBtn">Search</button>
       </div>
 
@@ -158,25 +241,28 @@
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    const backBtn        = document.getElementById("backBtn");
-    const loggedInAsEl   = document.getElementById("loggedInAs");
-    const spotNameEl     = document.getElementById("spotName");
-    const latEl          = document.getElementById("latitude");
-    const lngEl          = document.getElementById("longitude");
-    const useLocationBtn = document.getElementById("useLocationBtn");
-    const saveSpotBtn    = document.getElementById("saveSpotBtn");
-    const statusMsg      = document.getElementById("statusMsg");
-    const mapSearchInput = document.getElementById("mapSearchInput");
-    const mapSearchBtn   = document.getElementById("mapSearchBtn");
+    const backBtn          = document.getElementById("backBtn");
+    const loggedInAsEl     = document.getElementById("loggedInAs");
+    const spotNameEl       = document.getElementById("spotName");
+    const latEl            = document.getElementById("latitude");
+    const lngEl            = document.getElementById("longitude");
+    const useLocationBtn   = document.getElementById("useLocationBtn");
+    const saveSpotBtn      = document.getElementById("saveSpotBtn");
+    const statusMsg        = document.getElementById("statusMsg");
+    const mapSearchInput   = document.getElementById("mapSearchInput");
+    const mapSearchBtn     = document.getElementById("mapSearchBtn");
+    const mapSearchClear   = document.getElementById("mapSearchClearBtn");
+    const suggestionsEl    = document.getElementById("mapSearchSuggestions");
 
     let currentUser = null;
     let map, marker;
+    let searchDebounceId = null;
 
     backBtn.onclick = () => {
       window.location.href = "index.html";
     };
 
-    // ---------- Normalization helpers (spot name uniqueness) ----------
+    // ---------- Name normalization (duplicate protection) ----------
 
     function normalizeSpotName(name) {
       return name
@@ -208,14 +294,12 @@
 
       marker = L.marker([startLat, startLng], { draggable: true }).addTo(map);
 
-      // Drag marker to update coordinates
       marker.on("dragend", () => {
         const { lat, lng } = marker.getLatLng();
         latEl.value = lat.toFixed(6);
         lngEl.value = lng.toFixed(6);
       });
 
-      // Click on map to move marker & update coords
       map.on("click", (e) => {
         marker.setLatLng(e.latlng);
         latEl.value = e.latlng.lat.toFixed(6);
@@ -223,13 +307,44 @@
       });
     }
 
-    // ---------- OpenStreetMap / Nominatim search ----------
+    // ---------- Nominatim search & suggestions ----------
 
-    async function searchLocation() {
-      const queryText = mapSearchInput.value.trim();
-      if (!queryText) return;
+    function hideSuggestions() {
+      suggestionsEl.style.display = "none";
+      suggestionsEl.innerHTML = "";
+    }
 
-      statusMsg.textContent = "Searching location…";
+    function showSuggestions(items) {
+      if (!items.length) {
+        hideSuggestions();
+        return;
+      }
+
+      suggestionsEl.innerHTML = "";
+      items.forEach(item => {
+        const li = document.createElement("li");
+        const [main, ...rest] = (item.display_name || "").split(",");
+        const sub = rest.join(",").trim();
+
+        li.innerHTML = `
+          <div class="suggestion-main">${main || "Unnamed place"}</div>
+          ${sub ? `<div class="suggestion-sub">${sub}</div>` : ""}
+        `;
+        li.onclick = () => {
+          applySearchResult(item);
+          hideSuggestions();
+        };
+        suggestionsEl.appendChild(li);
+      });
+
+      suggestionsEl.style.display = "block";
+    }
+
+    async function fetchSuggestions(queryText) {
+      if (!queryText) {
+        hideSuggestions();
+        return;
+      }
 
       try {
         const url =
@@ -242,34 +357,92 @@
         if (!res.ok) throw new Error("HTTP " + res.status);
 
         const data = await res.json();
+        showSuggestions(data);
+      } catch (err) {
+        console.error("Suggestion search failed:", err);
+        hideSuggestions();
+      }
+    }
+
+    function applySearchResult(result) {
+      const lat = parseFloat(result.lat);
+      const lon = parseFloat(result.lon);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      marker.setLatLng([lat, lon]);
+      map.setView([lat, lon], 12);
+      latEl.value = lat.toFixed(6);
+      lngEl.value = lon.toFixed(6);
+
+      mapSearchInput.value = result.display_name || "";
+      mapSearchClear.style.display = mapSearchInput.value ? "block" : "none";
+      statusMsg.textContent = `Location set from search: ${result.display_name}`;
+    }
+
+    async function searchLocation() {
+      const queryText = mapSearchInput.value.trim();
+      if (!queryText) return;
+
+      statusMsg.textContent = "Searching location…";
+
+      try {
+        const url =
+          "https://nominatim.openstreetmap.org/search" +
+          `?format=json&q=${encodeURIComponent(queryText)}&limit=1`;
+
+        const res = await fetch(url, {
+          headers: { "Accept-Language": "en" }
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
+        const data = await res.json();
         if (!data.length) {
           statusMsg.textContent = "No results found for that search.";
           return;
         }
 
-        const best = data[0];
-        const lat = parseFloat(best.lat);
-        const lon = parseFloat(best.lon);
-        if (isNaN(lat) || isNaN(lon)) {
-          statusMsg.textContent = "Search result missing coordinates.";
-          return;
-        }
-
-        marker.setLatLng([lat, lon]);
-        map.setView([lat, lon], 12);
-        latEl.value = lat.toFixed(6);
-        lngEl.value = lon.toFixed(6);
-        statusMsg.textContent = `Location set from search: ${best.display_name}`;
+        applySearchResult(data[0]);
       } catch (err) {
         statusMsg.textContent = "Search failed: " + (err.message || err);
       }
     }
 
     mapSearchBtn.onclick = searchLocation;
+
+    mapSearchInput.addEventListener("input", () => {
+      const value = mapSearchInput.value;
+      mapSearchClear.style.display = value ? "block" : "none";
+
+      if (searchDebounceId) clearTimeout(searchDebounceId);
+      const trimmed = value.trim();
+      if (!trimmed) {
+        hideSuggestions();
+        return;
+      }
+      searchDebounceId = setTimeout(() => {
+        fetchSuggestions(trimmed);
+      }, 400);
+    });
+
     mapSearchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
+        hideSuggestions();
         searchLocation();
+      }
+    });
+
+    mapSearchClear.onclick = () => {
+      mapSearchInput.value = "";
+      mapSearchClear.style.display = "none";
+      hideSuggestions();
+      statusMsg.textContent = "";
+    };
+
+    // Hide suggestions when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".map-search-wrapper")) {
+        hideSuggestions();
       }
     });
 
