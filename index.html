@@ -58,7 +58,9 @@
       onAuthStateChanged,
       signInWithEmailAndPassword,
       createUserWithEmailAndPassword,
-      signOut
+      signOut,
+      GoogleAuthProvider,
+      signInWithPopup
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
 
     import {
@@ -109,13 +111,25 @@
               <button type="submit" class="primary-btn" data-mode="login">Log in</button>
               <button type="button" class="secondary-btn" id="signUpBtn">Sign up</button>
             </div>
-            <div id="authError" class="muted-text" style="color:#f97373;">${errorMessage}</div>
+            <div style="margin:6px 0 2px 0;font-size:0.8rem;text-align:center;" class="muted-text">
+              or
+            </div>
+            <button type="button"
+                    class="secondary-btn"
+                    id="googleLoginBtn"
+                    style="width:100%;justify-content:center;">
+              Continue with Google
+            </button>
+            <div id="authError" class="muted-text" style="color:#f97373;margin-top:4px;">
+              ${errorMessage}
+            </div>
           </form>
         </div>
       `;
 
-      const form = document.getElementById("authForm");
-      const signUpBtn = document.getElementById("signUpBtn");
+      const form        = document.getElementById("authForm");
+      const signUpBtn   = document.getElementById("signUpBtn");
+      const googleBtn   = document.getElementById("googleLoginBtn");
 
       form.onsubmit = async (e) => {
         e.preventDefault();
@@ -139,6 +153,15 @@
           await createUserWithEmailAndPassword(auth, email, pass);
         } catch (err) {
           renderAuthForm("Sign up failed: " + (err.code || err.message));
+        }
+      };
+
+      googleBtn.onclick = async () => {
+        try {
+          const provider = new GoogleAuthProvider();
+          await signInWithPopup(auth, provider);
+        } catch (err) {
+          renderAuthForm("Google sign-in failed: " + (err.code || err.message));
         }
       };
     }
@@ -240,15 +263,12 @@
       const scores = usable.map(c => {
         let penalty = 0;
 
-        // Temperature tolerance: ±5 °C
         const tempDiff = Math.abs(c.weatherTemp - temp);
         if (tempDiff > 5) penalty += (tempDiff - 5) * 2;
 
-        // Wind tolerance: ±4 m/s
         const windDiff = Math.abs(c.weatherWindMs - windMs);
         if (windDiff > 4) penalty += (windDiff - 4) * 3;
 
-        // Pressure regime: <1000 vs ≥1000 is "no penalty"
         if (press < 1000) {
           if (c.weatherPressure >= 1000) penalty += 10;
         } else {
@@ -329,7 +349,6 @@
         weatherEl.textContent =
           "Weather now: " + icon + " " + weatherParts.join(", ");
 
-        // Build predictions for the next 3 days
         const hourly = data.hourly || {};
         const times  = hourly.time || [];
         const temps  = hourly.temperature_2m || [];
@@ -381,7 +400,6 @@
           if (score == null) {
             pieces.push(`${wd}: not enough data`);
           } else {
-            // Color by score like predictions page
             let color = "#f97373"; // poor
             if (score >= 70)      color = "#22c55e"; // good
             else if (score >= 40) color = "#eab308"; // medium
@@ -426,7 +444,6 @@
       const spots = [];
       snap.forEach(docSnap => spots.push({ id: docSnap.id, ...docSnap.data() }));
 
-      // Load all catches once, then filter per spot
       const catchesSnap = await getDocs(
         query(collection(db, "catches"), where("userId", "==", user.uid))
       );
@@ -460,7 +477,6 @@
             ? `https://www.google.com/maps?q=${spot.latitude},${spot.longitude}`
             : null;
 
-        // header + stats + weather + prediction
         spotDiv.innerHTML = `
           <div class="spot-header-line">
             <h3>${spot.name || "Unnamed spot"}</h3>
@@ -515,7 +531,6 @@
         spotDiv.appendChild(actionsDiv);
         spotsList.appendChild(spotDiv);
 
-        // Now that DOM exists for this spot, fetch weather + predictions
         await fetchWeatherAndPredictionForSpot(spot, spotCatches);
       }
     }
