@@ -222,7 +222,7 @@
         "https://api.open-meteo.com/v1/forecast" +
         `?latitude=${lat}&longitude=${lon}` +
         "&hourly=temperature_2m,windspeed_10m,pressure_msl,weathercode,apparent_temperature" +
-        "&daily=temperature_2m_max,temperature_2m_min,weathercode,pressure_msl,moon_phase,sunrise,sunset" +
+        "&daily=temperature_2m_max,temperature_2m_min,moon_phase,sunrise,sunset" +
         "&timezone=auto&forecast_days=4";
 
       const res = await fetch(url);
@@ -232,7 +232,7 @@
       return res.json();
     }
 
-    // Create a small per-day summary from forecast
+    // Build daily summary WITHOUT pressure (we compute from hourly)
     function buildDailyForecastSummary(forecast) {
       const days = [];
       const daily = forecast.daily;
@@ -242,13 +242,31 @@
           date: daily.time[i],
           tMin: daily.temperature_2m_min[i],
           tMax: daily.temperature_2m_max[i],
-          pressure: daily.pressure_msl[i],
           moonPhase: daily.moon_phase[i],
           sunrise: daily.sunrise[i],
           sunset: daily.sunset[i]
         });
       }
       return days;
+    }
+
+    // Compute average pressure for a given date (YYYY-MM-DD) using hourly data
+    function averagePressureForDate(forecast, dateStr) {
+      const times = forecast.hourly.time;
+      const pressures = forecast.hourly.pressure_msl;
+      let sum = 0;
+      let count = 0;
+
+      for (let i = 0; i < times.length; i++) {
+        if (times[i].startsWith(dateStr)) {
+          const val = pressures[i];
+          if (safeNum(val)) {
+            sum += val;
+            count++;
+          }
+        }
+      }
+      return count > 0 ? sum / count : NaN;
     }
 
     // Find hours tomorrow that are between 1h before sunrise and 1h after sunset
@@ -292,7 +310,7 @@
       for (const day of daysToUse) {
         const dayLabel = formatDateShortLabel(day.date);
         const dayMidTemp = (day.tMin + day.tMax) / 2;
-        const dayMidPressure = day.pressure;
+        const dayMidPressure = averagePressureForDate(forecast, day.date);
         const dayMoon = day.moonPhase;
 
         let matches = 0;
@@ -338,12 +356,14 @@
           }
 
           // Pressure regime (low vs normal/high)
-          const catchLow = p < 1000;
-          const dayLow = dayMidPressure < 1000;
-          if (catchLow === dayLow) {
-            matches += 1.0;
-          } else {
-            penalties += 1.0;
+          if (safeNum(dayMidPressure)) {
+            const catchLow = p < 1000;
+            const dayLow = dayMidPressure < 1000;
+            if (catchLow === dayLow) {
+              matches += 1.0;
+            } else {
+              penalties += 1.0;
+            }
           }
 
           // Moon phase if both exist (0..1). Very rough.
@@ -386,7 +406,7 @@
         debug.push(
           `${day.date} (${dayLabel}) – score=${scorePct}%, ` +
           `usedCatches=${used}, matches=${matches.toFixed(2)}, penalties=${penalties.toFixed(2)}, ` +
-          `Tmid=${dayMidTemp.toFixed(1)}°C, P=${dayMidPressure.toFixed(1)} hPa`
+          `Tmid=${dayMidTemp.toFixed(1)}°C, Pmid=${safeNum(dayMidPressure) ? dayMidPressure.toFixed(1) : "NaN"} hPa`
         );
       }
 
