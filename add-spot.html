@@ -23,6 +23,7 @@
       border-radius: 16px;
       overflow: hidden;
     }
+
     /* Search area above map */
     .map-search-row {
       display: flex;
@@ -31,26 +32,21 @@
       align-items: center;
       margin-top: 8px;
     }
-/* Match Spot Name input style but keep round pill shape */
-.map-search-input {
-  flex: 1;
-  min-width: 180px;
-  padding: 12px 16px;
-  border-radius: 9999px;         /* pill shape */
-  border: 1px solid #1e293b;     /* same border as other inputs */
-  background: #0f172a;           /* same dark blue input background */
-  color: #fff;                   /* white typing text to match UI */
-  font-size: 16px;
-}
 
-.map-search-input::placeholder {
-  color: #94a3b8;                /* same placeholder color */
-}
-
-    /* Make sure text while typing is visible */
+    /* Match Spot Name input style, but keep pill shape */
     .map-search-input {
-      color: #000; /* black text as you requested */
-      background: #f9fafb;
+      flex: 1;
+      min-width: 180px;
+      padding: 12px 16px;
+      border-radius: 9999px;        /* pill shape */
+      border: 1px solid #1e293b;    /* same border as other inputs */
+      background: #020617;          /* same dark input background */
+      color: #e5e7eb;               /* same text color */
+      font-size: 16px;
+    }
+
+    .map-search-input::placeholder {
+      color: #6b7280;               /* same placeholder color */
     }
   </style>
 </head>
@@ -180,12 +176,12 @@
       window.location.href = "index.html";
     };
 
-    // ---------- Normalization helpers (same logic as before) ----------
+    // ---------- Normalization helpers (spot name uniqueness) ----------
 
     function normalizeSpotName(name) {
       return name
         .normalize("NFKD")
-        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[\u0300-\u036f]/g, "")  // strip accents
         .toLowerCase()
         .replace(/\s+/g, " ")
         .trim();
@@ -212,18 +208,22 @@
 
       marker = L.marker([startLat, startLng], { draggable: true }).addTo(map);
 
+      // Drag marker to update coordinates
       marker.on("dragend", () => {
         const { lat, lng } = marker.getLatLng();
         latEl.value = lat.toFixed(6);
         lngEl.value = lng.toFixed(6);
       });
 
+      // Click on map to move marker & update coords
       map.on("click", (e) => {
         marker.setLatLng(e.latlng);
         latEl.value = e.latlng.lat.toFixed(6);
         lngEl.value = e.latlng.lng.toFixed(6);
       });
     }
+
+    // ---------- OpenStreetMap / Nominatim search ----------
 
     async function searchLocation() {
       const queryText = mapSearchInput.value.trim();
@@ -310,8 +310,8 @@
 
       let rawName = spotNameEl.value || "";
       rawName = rawName.replace(/\s+/g, " ");
-      const prettyName = prettifySpotName(rawName);
-      const normalized = normalizeSpotName(rawName);
+      const prettyName  = prettifySpotName(rawName);
+      const normalized  = normalizeSpotName(rawName);
 
       if (!normalized) {
         statusMsg.textContent = "Spot name is required.";
@@ -330,6 +330,7 @@
       saveSpotBtn.textContent = "Saving…";
 
       try {
+        // Check duplicates for this user (ignore case/accents/spaces)
         const q = query(
           collection(db, "spots"),
           where("userId", "==", currentUser.uid)
