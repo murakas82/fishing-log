@@ -5,12 +5,22 @@
   <title>Add a fishing spot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="style.css" />
+  <!-- Leaflet CSS (for map + choose from map if you already use it) -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   />
+  <style>
+    /* Simple default map size – you can adjust to your liking */
+    #map {
+      width: 100%;
+      height: 260px;
+      border-radius: 16px;
+      margin-top: 12px;
+    }
+  </style>
 </head>
 <body>
   <div class="app fade-in">
@@ -22,47 +32,57 @@
             Save a named spot with GPS coordinates.
           </p>
         </div>
-        <button class="secondary-btn btn-back-main" id="backBtn">
-          ← Back to main
-        </button>
+        <div>
+          <button class="secondary-btn btn-back-main" id="backBtn">
+            ← Back to main
+          </button>
+        </div>
       </div>
     </header>
 
     <div class="card">
-      <form id="spotForm">
-        <label for="spotName">Spot name</label>
-        <input id="spotName" type="text" placeholder="Paunküla" required />
-
-        <label for="lat">Latitude</label>
-        <input id="lat" type="number" step="0.000001" required />
-
-        <label for="lng">Longitude</label>
-        <input id="lng" type="number" step="0.000001" required />
-
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-          <button type="button" class="secondary-btn" id="useLocationBtn">
-            Use my location
-          </button>
-          <button type="submit" class="primary-btn">
-            Save fishing spot
-          </button>
+      <div class="card-header">
+        <div id="loggedInInfo" class="muted-text">
+          Checking login…
         </div>
-        <p id="formMessage" class="muted-text" style="margin-top:8px;"></p>
-      </form>
-    </div>
-
-    <div class="card" style="position:relative;">
-      <h2>Pick location on map</h2>
-      <p class="muted-text">
-        You can search or drag the marker. Latitude/Longitude fields update automatically.
-      </p>
-      <div class="map-search-container">
-        <input id="mapSearchInput" type="text" placeholder="Search location…" />
       </div>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="spotName">Spot name</label>
+          <input id="spotName" type="text" autocomplete="off"
+            placeholder="For example: Paunküla" />
+        </div>
+
+        <div class="form-field">
+          <label for="latitude">Latitude</label>
+          <input id="latitude" type="number" step="0.000001"
+            placeholder="Latitude (from spot or map)" />
+        </div>
+
+        <div class="form-field">
+          <label for="longitude">Longitude</label>
+          <input id="longitude" type="number" step="0.000001"
+            placeholder="Longitude (from spot or map)" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="secondary-btn" id="useLocationBtn">Use my location</button>
+      </div>
+
+      <!-- Optional map to pick coordinates -->
       <div id="map"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+        <button class="primary-btn" id="saveSpotBtn">Save fishing spot</button>
+      </div>
+
+      <p id="statusMsg" class="muted-text" style="margin-top:10px;"></p>
     </div>
   </div>
 
+  <!-- Leaflet JS -->
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
@@ -72,17 +92,19 @@
   <script type="module">
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+
     import {
       getAuth,
       onAuthStateChanged
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js";
+
     import {
       getFirestore,
       collection,
-      query,
-      where,
+      addDoc,
       getDocs,
-      addDoc
+      query,
+      where
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -94,160 +116,208 @@
       appId: "1:1056807867882:web:e59ddd8f6353d190080e93"
     };
 
-    const app = initializeApp(firebaseConfig);
+    const app  = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
 
-    const backBtn       = document.getElementById("backBtn");
-    const spotForm      = document.getElementById("spotForm");
-    const spotNameInput = document.getElementById("spotName");
-    const latInput      = document.getElementById("lat");
-    const lngInput      = document.getElementById("lng");
+    const backBtn        = document.getElementById("backBtn");
+    const loggedInInfo   = document.getElementById("loggedInInfo");
+    const spotNameInput  = document.getElementById("spotName");
+    const latInput       = document.getElementById("latitude");
+    const lngInput       = document.getElementById("longitude");
     const useLocationBtn = document.getElementById("useLocationBtn");
-    const formMessage   = document.getElementById("formMessage");
-    const mapSearchInput = document.getElementById("mapSearchInput");
+    const saveSpotBtn    = document.getElementById("saveSpotBtn");
+    const statusMsg      = document.getElementById("statusMsg");
 
     let currentUser = null;
+    let existingNormalizedNames = new Set();
     let map, marker;
 
     backBtn.onclick = () => {
       window.location.href = "index.html";
     };
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        window.location.href = "index.html";
-        return;
-      }
-      currentUser = user;
-      initMap();
-    });
+    /* ---------------------------
+       Name normalization helpers
+       --------------------------- */
+
+    function normalizeSpotName(name) {
+      return name
+        .normalize("NFKD")                       // split accents
+        .replace(/[\u0300-\u036f]/g, "")         // remove accent marks
+        .toLowerCase()
+        .replace(/\s+/g, " ")                    // collapse multiple spaces
+        .trim();
+    }
+
+    function prettifySpotName(name) {
+      const cleaned = name.replace(/\s+/g, " ").trim();
+      if (!cleaned) return "";
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+
+    /* ---------------------------
+       Load existing spots for user
+       --------------------------- */
+
+    async function loadExistingSpotNames(user) {
+      existingNormalizedNames.clear();
+      const q = query(
+        collection(db, "spots"),
+        where("userId", "==", user.uid)
+      );
+      const snap = await getDocs(q);
+      snap.forEach(docSnap => {
+        const d = docSnap.data();
+        const baseName = d.normalizedName || d.name || "";
+        const norm = normalizeSpotName(baseName);
+        if (norm) existingNormalizedNames.add(norm);
+      });
+    }
+
+    /* ---------------------------
+       Leaflet map setup
+       --------------------------- */
 
     function initMap() {
-      map = L.map("map").setView([59.437, 24.7536], 8);
+      map = L.map("map").setView([59.0, 25.0], 7);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 18,
         attribution: "&copy; OpenStreetMap contributors"
       }).addTo(map);
 
-      marker = L.marker([59.437, 24.7536], { draggable: true }).addTo(map);
-
-      marker.on("moveend", (e) => {
-        const { lat, lng } = e.target.getLatLng();
+      map.on("click", (e) => {
+        const { lat, lng } = e.latlng;
         latInput.value = lat.toFixed(6);
         lngInput.value = lng.toFixed(6);
-      });
 
-      map.on("click", (e) => {
-        marker.setLatLng(e.latlng);
-        latInput.value = e.latlng.lat.toFixed(6);
-        lngInput.value = e.latlng.lng.toFixed(6);
-      });
-
-      // Simple search using Nominatim
-      mapSearchInput.addEventListener("keydown", async (e) => {
-        if (e.key !== "Enter") return;
-        e.preventDefault();
-        const queryText = mapSearchInput.value.trim();
-        if (!queryText) return;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-              queryText
-            )}`
-          );
-          const data = await res.json();
-          if (!data.length) {
-            formMessage.textContent = "Location not found.";
-            return;
-          }
-          const place = data[0];
-          const lat = parseFloat(place.lat);
-          const lon = parseFloat(place.lon);
-          map.setView([lat, lon], 12);
-          marker.setLatLng([lat, lon]);
-          latInput.value = lat.toFixed(6);
-          lngInput.value = lon.toFixed(6);
-        } catch (err) {
-          formMessage.textContent = "Search error.";
+        if (!marker) {
+          marker = L.marker(e.latlng).addTo(map);
+        } else {
+          marker.setLatLng(e.latlng);
         }
       });
     }
+
+    /* ---------------------------
+       Geolocation
+       --------------------------- */
 
     useLocationBtn.onclick = () => {
       if (!navigator.geolocation) {
-        formMessage.textContent = "Geolocation not available in this browser.";
+        statusMsg.textContent = "Geolocation is not available in this browser.";
         return;
       }
+
+      statusMsg.textContent = "Getting your location…";
+
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          latInput.value = lat.toFixed(6);
-          lngInput.value = lng.toFixed(6);
-          if (map && marker) {
-            map.setView([lat, lng], 13);
-            marker.setLatLng([lat, lng]);
+          const { latitude, longitude } = pos.coords;
+          latInput.value = latitude.toFixed(6);
+          lngInput.value = longitude.toFixed(6);
+
+          const latLng = [latitude, longitude];
+          if (!map) initMap();
+          map.setView(latLng, 12);
+          if (!marker) {
+            marker = L.marker(latLng).addTo(map);
+          } else {
+            marker.setLatLng(latLng);
           }
+
+          statusMsg.textContent = "Location filled from GPS.";
         },
-        () => {
-          formMessage.textContent = "Unable to get your location.";
+        (err) => {
+          statusMsg.textContent = "Could not get location: " + err.message;
         }
       );
     };
 
-    function normalizeSpotName(name) {
-      name = name.trim();
-      if (!name) return "";
-      return name.charAt(0).toUpperCase() + name.slice(1);
-    }
+    /* ---------------------------
+       Save spot (with duplicate check)
+       --------------------------- */
 
-    async function spotNameExistsForUser(userId, name) {
-      const q = query(
-        collection(db, "spots"),
-        where("userId", "==", userId),
-        where("name", "==", name)
-      );
-      const snap = await getDocs(q);
-      return !snap.empty;
-    }
+    saveSpotBtn.onclick = async () => {
+      statusMsg.textContent = "";
 
-    spotForm.onsubmit = async (e) => {
-      e.preventDefault();
-      if (!currentUser) return;
-
-      formMessage.textContent = "";
-
-      const rawName = spotNameInput.value;
-      const name = normalizeSpotName(rawName);
-      const lat  = parseFloat(latInput.value);
-      const lng  = parseFloat(lngInput.value);
-
-      if (!name || isNaN(lat) || isNaN(lng)) {
-        formMessage.textContent = "Please fill all fields.";
+      if (!currentUser) {
+        statusMsg.textContent = "You must be logged in.";
         return;
       }
 
-      if (await spotNameExistsForUser(currentUser.uid, name)) {
-        formMessage.textContent = "You already have a spot with this name.";
+      let rawName = spotNameInput.value || "";
+      // live-capitalize first character as requested
+      rawName = rawName.replace(/\s+/g, " "); // collapse spaces while we're at it
+      const prettyName = prettifySpotName(rawName);
+      const normalized = normalizeSpotName(rawName);
+
+      if (!normalized) {
+        statusMsg.textContent = "Spot name is required.";
         return;
       }
+
+      // Check for duplicates (case-insensitive, accents removed, spaces ignored)
+      if (existingNormalizedNames.has(normalized)) {
+        statusMsg.textContent =
+          "You already have a spot with this name (ignoring case and spaces).";
+        return;
+      }
+
+      const lat = parseFloat(latInput.value);
+      const lng = parseFloat(lngInput.value);
+
+      if (isNaN(lat) || isNaN(lng)) {
+        statusMsg.textContent = "Please set latitude and longitude (from map or GPS).";
+        return;
+      }
+
+      saveSpotBtn.disabled = true;
+      saveSpotBtn.textContent = "Saving…";
 
       try {
         await addDoc(collection(db, "spots"), {
-          userId: currentUser.uid,
-          name,
+          name: prettyName,
+          normalizedName: normalized,
           latitude: lat,
           longitude: lng,
+          userId: currentUser.uid,
           createdAt: Date.now()
         });
-        formMessage.textContent = "Spot saved.";
-        spotForm.reset();
+
+        // Keep the new name in the local set so that immediate re-add is blocked too
+        existingNormalizedNames.add(normalized);
+
+        statusMsg.textContent = "Spot saved. Redirecting to main page…";
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 800);
       } catch (err) {
-        formMessage.textContent = "Error saving spot.";
+        statusMsg.textContent = "Error saving spot: " + (err.message || err);
+        saveSpotBtn.disabled = false;
+        saveSpotBtn.textContent = "Save fishing spot";
       }
     };
+
+    /* ---------------------------
+       Auth + initialization
+       --------------------------- */
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        loggedInInfo.textContent = "Not logged in. Redirecting…";
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 800);
+        return;
+      }
+
+      currentUser = user;
+      loggedInInfo.textContent = `Logged in as ${user.email || "unknown user"}`;
+
+      initMap();
+      await loadExistingSpotNames(user);
+    });
   </script>
 </body>
 </html>
