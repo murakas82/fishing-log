@@ -387,3 +387,9 @@ a.danger-btn {
     align-items: flex-start;
   }
 }
+
+/* Move Leaflet zoom controls so they do NOT overlap the search suggestions */
+.leaflet-top.leaflet-left {
+  margin-top: 120px !important;   /* adjust as needed */
+  margin-left: 8px !important;
+}
