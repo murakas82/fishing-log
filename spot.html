@@ -4,35 +4,39 @@
   <meta charset="UTF-8" />
   <title>Fishing spot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app fade-in">
-    <header>
-      <h1>Fishing spot</h1>
-      <p>See details and catches for this spot.</p>
+    <header class="card">
+      <div class="card-header">
+        <div>
+          <h1>Fishing spot</h1>
+          <p class="muted-text">See details and catches for this spot.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="secondary-btn btn-back-main" id="backToMainBtn">
+            ← Back to main
+          </button>
+        </div>
+      </div>
     </header>
 
-    <!-- Spot header -->
     <div class="card" id="spotHeaderCard">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div class="card-header">
         <div>
           <h2 id="spotNameHeading" style="margin:0 0 4px;">Loading spot…</h2>
           <p id="spotInfo" class="muted-text" style="margin:0;">
             Loading data…
           </p>
         </div>
-
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="secondary-btn" id="backToMainBtn">← Back to main</button>
           <button class="secondary-btn" id="addCatchBtn">Add catch</button>
           <button class="secondary-btn" id="predictionsBtn">Predictions</button>
         </div>
       </div>
     </div>
 
-    <!-- Catches list -->
     <div class="card">
       <h2>Catches at this spot</h2>
       <div id="catchesContainer">
@@ -61,7 +65,6 @@
       deleteDoc
     } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-    // --- Firebase setup (same as other pages) ---
     const firebaseConfig = {
       apiKey: "AIzaSyCXIdT74cNDSVIoMs3NZ86tPf2kzFm8Iug",
       authDomain: "fishing-log-app-murx.firebaseapp.com",
@@ -90,14 +93,30 @@
       return params.get("id");
     }
 
-    function formatDate(timestamp) {
-      if (!timestamp) return "";
-      const d = new Date(timestamp);
+    function formatDate(ts) {
+      if (!ts) return "";
+      const d = new Date(ts);
       const day = String(d.getDate()).padStart(2, "0");
       const month = String(d.getMonth() + 1).padStart(2, "0");
       const year = d.getFullYear();
       return `${day}/${month}/${year}`;
     }
+
+    backToMainBtn.onclick = () => {
+      window.location.href = "index.html";
+    };
+
+    addCatchBtn.onclick = () => {
+      if (!currentSpot) return;
+      window.location.href =
+        `add-catch.html?spotId=${encodeURIComponent(currentSpot.id)}`;
+    };
+
+    predictionsBtn.onclick = () => {
+      if (!currentSpot) return;
+      window.location.href =
+        `predictions.html?spotId=${encodeURIComponent(currentSpot.id)}`;
+    };
 
     onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -119,8 +138,7 @@
 
     async function loadSpot(spotId) {
       try {
-        const spotRef = doc(db, "spots", spotId);
-        const snap = await getDoc(spotRef);
+        const snap = await getDoc(doc(db, "spots", spotId));
         if (!snap.exists()) {
           spotNameHeading.textContent = "Spot not found";
           spotInfoEl.textContent = "This spot does not exist.";
@@ -136,20 +154,17 @@
             `Location: ${currentSpot.latitude.toFixed(4)}, ${currentSpot.longitude.toFixed(4)}`
           );
         }
-        if (infoParts.length === 0) {
-          spotInfoEl.textContent = "No additional info.";
-        } else {
-          spotInfoEl.textContent = infoParts.join(" • ");
-        }
-      } catch (err) {
-        console.error(err);
+        spotInfoEl.textContent =
+          infoParts.length ? infoParts.join(" • ") : "No additional info.";
+      } catch {
         spotNameHeading.textContent = "Error loading spot";
         spotInfoEl.textContent = "Failed to load spot data.";
       }
     }
 
     async function loadCatches(spotId) {
-      catchesContainer.innerHTML = `<p class="muted-text">Loading catches…</p>`;
+      catchesContainer.innerHTML =
+        `<p class="muted-text">Loading catches…</p>`;
 
       try {
         const q = query(
@@ -167,8 +182,8 @@
         }
 
         catches.sort((a, b) => b.timestamp - a.timestamp);
-
         catchesContainer.innerHTML = "";
+
         for (const c of catches) {
           const div = document.createElement("div");
           div.style.marginBottom = "16px";
@@ -179,38 +194,31 @@
             : "-";
 
           const dateStr = formatDate(c.timestamp);
-
-          const lure = c.lure && c.lure.trim().length > 0 ? c.lure.trim() : "-";
-
+          const lure = c.lure?.trim() || "-";
           const depthStr =
             typeof c.depth === "number" && !isNaN(c.depth)
               ? `${c.depth.toFixed(1)} m`
               : "-";
-
           const waterTempStr =
             typeof c.waterTemp === "number" && !isNaN(c.waterTemp)
               ? `${c.waterTemp.toFixed(1)} °C`
               : "-";
 
-          // 🔧 Weather text: use description if available, otherwise build from pieces.
           let weatherText = "-";
-          if (c.weatherDescription && c.weatherDescription.trim().length > 0) {
-            // description already contains temp + wind → use only this
-            weatherText = c.weatherDescription;
+          if (c.weatherDescription?.trim()) {
+            weatherText = c.weatherDescription.trim();
           } else {
             const parts = [];
             if (typeof c.weatherTemp === "number" && !isNaN(c.weatherTemp)) {
               parts.push(`${c.weatherTemp.toFixed(1)} °C`);
             }
-            if (c.weatherCondition && c.weatherCondition.trim().length > 0) {
+            if (c.weatherCondition?.trim()) {
               parts.push(c.weatherCondition.trim());
             }
             if (typeof c.weatherWindMs === "number" && !isNaN(c.weatherWindMs)) {
               parts.push(`wind ${c.weatherWindMs.toFixed(1)} m/s`);
             }
-            if (parts.length) {
-              weatherText = parts.join(", ");
-            }
+            if (parts.length) weatherText = parts.join(", ");
           }
 
           div.innerHTML = `
@@ -234,8 +242,7 @@
 
           catchesContainer.appendChild(div);
         }
-      } catch (err) {
-        console.error(err);
+      } catch {
         catchesContainer.innerHTML =
           `<p class="muted-text">Failed to load catches.</p>`;
       }
@@ -245,29 +252,11 @@
       if (!confirm("Delete this catch? This cannot be undone.")) return;
       try {
         await deleteDoc(doc(db, "catches", catchId));
-        // Reload catches list
         await loadCatches(currentSpot.id);
-      } catch (err) {
-        console.error(err);
+      } catch {
         alert("Failed to delete catch.");
       }
     }
-
-    backToMainBtn.onclick = () => {
-      window.location.href = "index.html";
-    };
-
-    addCatchBtn.onclick = () => {
-      if (!currentSpot) return;
-      window.location.href =
-        `add-catch.html?spotId=${encodeURIComponent(currentSpot.id)}`;
-    };
-
-    predictionsBtn.onclick = () => {
-      if (!currentSpot) return;
-      window.location.href =
-        `predictions.html?spotId=${encodeURIComponent(currentSpot.id)}`;
-    };
   </script>
 </body>
 </html>
