@@ -11,8 +11,9 @@
     <header class="card">
       <div class="card-header">
         <div>
-          <h1>My Fishing Log</h1>
-          <p class="muted-text">
+          <!-- i18n: main title + subtitle -->
+          <h1 data-i18n="home.title">My Fishing Log</h1>
+          <p class="muted-text" data-i18n="home.subtitle">
             Track your catches anywhere – with login, spots, weather &amp; predictions.
           </p>
         </div>
@@ -22,17 +23,22 @@
 
     <!-- Stats -->
     <div class="card" id="statsCard" style="display:none;">
-      <h2>Stats</h2>
+      <h2 data-i18n="home.statsTitle">Stats</h2>
       <div id="statsContent" class="stat-badges"></div>
     </div>
 
     <!-- My fishing spots -->
     <div class="card" id="spotsCard" style="display:none;">
       <div class="card-header">
-        <h2>My fishing spots</h2>
+        <h2 data-i18n="home.spotsTitle">My fishing spots</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="secondary-btn" id="mapViewBtn">Map view</button>
-          <button class="secondary-btn" id="addSpotBtn">Add new spot</button>
+          <!-- i18n: buttons -->
+          <button class="secondary-btn" id="mapViewBtn" data-i18n="home.mapView">
+            Map view
+          </button>
+          <button class="secondary-btn" id="addSpotBtn" data-i18n="home.addNewSpot">
+            Add new spot
+          </button>
         </div>
       </div>
       <div id="spotsList"></div>
@@ -42,11 +48,15 @@
     <div class="card" id="loadingCard">
       <div class="loading-center">
         <div class="spinner"></div>
-        <div>Loading app…</div>
+        <div data-i18n="home.loadingApp">Loading app…</div>
       </div>
     </div>
   </div>
 
+  <!-- i18n -->
+  <script src="translations.js"></script>
+
+  <!-- Main app logic -->
   <script type="module">
     import { initializeApp }
       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -93,34 +103,65 @@
     const mapViewBtn   = document.getElementById("mapViewBtn");
     const addSpotBtn   = document.getElementById("addSpotBtn");
 
+    // i18n helper for dynamic strings
+    const i18n = window.fishingLogI18n;
+    const t = (key) => (i18n && typeof i18n.t === "function") ? i18n.t(key) : key;
+
+    function reapplyTranslations() {
+      if (i18n && typeof i18n.applyTranslations === "function") i18n.applyTranslations();
+    }
+
     /* ---------- Auth form ---------- */
 
     function renderAuthForm(errorMessage = "") {
       authArea.innerHTML = `
         <div>
           <form id="authForm" style="display:flex;flex-direction:column;gap:6px;min-width:260px;">
-            <div style="font-size:0.85rem;">Log in or sign up</div>
-            <input type="email" id="authEmail" placeholder="Email" required />
-            <input type="password" id="authPassword" placeholder="Password" required />
+            <div style="font-size:0.85rem;" data-i18n="auth.title">Log in or sign up</div>
+
+            <input
+              type="email"
+              id="authEmail"
+              placeholder="Email"
+              data-i18n-placeholder="auth.emailPlaceholder"
+              required
+            />
+
+            <input
+              type="password"
+              id="authPassword"
+              placeholder="Password"
+              data-i18n-placeholder="auth.passwordPlaceholder"
+              required
+            />
+
             <div style="display:flex;gap:8px;">
-              <button type="submit" class="primary-btn" data-mode="login">Log in</button>
-              <button type="button" class="secondary-btn" id="signUpBtn">Sign up</button>
+              <button type="submit" class="primary-btn" data-mode="login" data-i18n="auth.logIn">Log in</button>
+              <button type="button" class="secondary-btn" id="signUpBtn" data-i18n="auth.signUp">Sign up</button>
             </div>
+
             <div style="margin:6px 0 2px 0;font-size:0.8rem;text-align:center;" class="muted-text">
-              or
+              <span data-i18n="auth.or">or</span>
             </div>
-            <button type="button"
-                    class="secondary-btn"
-                    id="googleLoginBtn"
-                    style="width:100%;justify-content:center;">
+
+            <button
+              type="button"
+              class="secondary-btn"
+              id="googleLoginBtn"
+              style="width:100%;justify-content:center;"
+              data-i18n="auth.continueWithGoogle"
+            >
               Continue with Google
             </button>
+
             <div id="authError" class="muted-text" style="color:#f97373;margin-top:4px;">
               ${errorMessage}
             </div>
           </form>
         </div>
       `;
+
+      reapplyTranslations();
 
       const form      = document.getElementById("authForm");
       const signUpBtn = document.getElementById("signUpBtn");
@@ -133,7 +174,7 @@
         try {
           await signInWithEmailAndPassword(auth, email, pass);
         } catch (err) {
-          renderAuthForm("Login failed: " + (err.code || err.message));
+          renderAuthForm(`${t("auth.loginFailedPrefix")} ${(err.code || err.message)}`);
         }
       };
 
@@ -141,13 +182,13 @@
         const email = document.getElementById("authEmail").value.trim();
         const pass  = document.getElementById("authPassword").value.trim();
         if (!email || !pass) {
-          renderAuthForm("Enter email & password, then press Sign up.");
+          renderAuthForm(t("auth.enterEmailPassword"));
           return;
         }
         try {
           await createUserWithEmailAndPassword(auth, email, pass);
         } catch (err) {
-          renderAuthForm("Sign up failed: " + (err.code || err.message));
+          renderAuthForm(`${t("auth.signUpFailedPrefix")} ${(err.code || err.message)}`);
         }
       };
 
@@ -156,7 +197,7 @@
           const provider = new GoogleAuthProvider();
           await signInWithPopup(auth, provider);
         } catch (err) {
-          renderAuthForm("Google sign-in failed: " + (err.code || err.message));
+          renderAuthForm(`${t("auth.googleFailedPrefix")} ${(err.code || err.message)}`);
         }
       };
     }
@@ -167,16 +208,23 @@
       authArea.innerHTML = `
         <div style="text-align:right;display:flex;flex-direction:column;gap:4px;">
           <div style="font-size:0.86rem;">
-            Logged in as <strong>${nameText}</strong>
+            <span data-i18n="common.loggedInAs">Logged in as …</span>
+            <strong>${nameText}</strong>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
-            <button class="secondary-btn" id="settingsBtn">Settings</button>
-            <button class="secondary-btn" id="logoutBtn">Log out</button>
+            <button class="secondary-btn" id="settingsBtn" data-i18n="home.settings">
+              Settings
+            </button>
+            <button class="secondary-btn" id="logoutBtn" data-i18n="home.logOut">
+              Log out
+            </button>
           </div>
         </div>
       `;
 
-      document.getElementById("logoutBtn").onclick  = () => signOut(auth);
+      reapplyTranslations();
+
+      document.getElementById("logoutBtn").onclick = () => signOut(auth);
       document.getElementById("settingsBtn").onclick = () => {
         window.location.href = "settings.html";
       };
@@ -198,7 +246,9 @@
       );
       const snap = await getDocs(q);
       if (snap.empty) {
-        statsContent.innerHTML = `<div class="muted-text">No catches yet.</div>`;
+        statsContent.innerHTML =
+          `<div class="muted-text" data-i18n="home.noCatchesYet">No catches yet.</div>`;
+        reapplyTranslations();
         return;
       }
 
@@ -222,13 +272,24 @@
       const avgWeight = totalWeight && total ? (totalWeight / total) : 0;
 
       statsContent.innerHTML = `
-        <span class="stat-pill">Total catches <strong>${total}</strong></span>
-        <span class="stat-pill">Biggest fish <strong>${biggestWeight.toFixed(2)} kg ${biggestSpecies}</strong></span>
-        <span class="stat-pill">Average weight <strong>${avgWeight.toFixed(2)} kg</strong></span>
+        <span class="stat-pill">
+          <span data-i18n="home.statsTotalCatches">Total catches</span>
+          <strong>${total}</strong>
+        </span>
+        <span class="stat-pill">
+          <span data-i18n="home.biggestFish">Biggest</span>
+          <strong>${biggestWeight.toFixed(2)} kg ${biggestSpecies}</strong>
+        </span>
+        <span class="stat-pill">
+          <span data-i18n="home.statsAverageWeight">Average weight</span>
+          <strong>${avgWeight.toFixed(2)} kg</strong>
+        </span>
       `;
+
+      reapplyTranslations();
     }
 
-    /* ---------- Prediction helpers (same as before) ---------- */
+    /* ---------- Prediction helpers ---------- */
 
     function getApproxMoonPhase(date) {
       const lp = 2551443;
@@ -277,19 +338,32 @@
       return scores.reduce((a, b) => a + b, 0) / scores.length;
     }
 
+    function getWeekdayShortName(dayIndex) {
+      const keys = [
+        "home.weekdaySun",
+        "home.weekdayMon",
+        "home.weekdayTue",
+        "home.weekdayWed",
+        "home.weekdayThu",
+        "home.weekdayFri",
+        "home.weekdaySat"
+      ];
+      return t(keys[dayIndex] || "home.weekdaySun");
+    }
+
     function getWeatherIconAndLabel(code) {
-      if (code === 0) return { icon: "☀️", label: "Clear" };
-      if (code === 1) return { icon: "🌤️", label: "Mainly clear" };
-      if (code === 2) return { icon: "⛅",  label: "Partly cloudy" };
-      if (code === 3) return { icon: "☁️", label: "Overcast" };
-      if (code >= 51 && code <= 57) return { icon: "🌦️", label: "Drizzle" };
-      if (code >= 61 && code <= 67) return { icon: "🌧️", label: "Rain" };
-      if (code >= 71 && code <= 77) return { icon: "🌨️", label: "Snow" };
-      if (code >= 80 && code <= 82) return { icon: "🌦️", label: "Rain showers" };
-      if (code >= 85 && code <= 86) return { icon: "🌨️", label: "Snow showers" };
-      if (code === 95) return { icon: "⛈️", label: "Thunderstorm" };
-      if (code === 96 || code === 99) return { icon: "⛈️", label: "Thunderstorm with hail" };
-      return { icon: "❓", label: "Unknown" };
+      if (code === 0)  return { icon: "☀️", label: t("home.weatherClear") };
+      if (code === 1)  return { icon: "🌤️", label: t("home.weatherMainlyClear") };
+      if (code === 2)  return { icon: "⛅",  label: t("home.weatherPartlyCloudy") };
+      if (code === 3)  return { icon: "☁️", label: t("home.weatherOvercast") };
+      if (code >= 51 && code <= 57) return { icon: "🌦️", label: t("home.weatherDrizzle") };
+      if (code >= 61 && code <= 67) return { icon: "🌧️", label: t("home.weatherRain") };
+      if (code >= 71 && code <= 77) return { icon: "🌨️", label: t("home.weatherSnow") };
+      if (code >= 80 && code <= 82) return { icon: "🌦️", label: t("home.weatherRainShowers") };
+      if (code >= 85 && code <= 86) return { icon: "🌨️", label: t("home.weatherSnowShowers") };
+      if (code === 95) return { icon: "⛈️", label: t("home.weatherThunderstorm") };
+      if (code === 96 || code === 99) return { icon: "⛈️", label: t("home.weatherThunderstormHail") };
+      return { icon: "❓", label: t("home.weatherUnknown") };
     }
 
     async function fetchWeatherAndPredictionForSpot(spot, spotCatches) {
@@ -297,18 +371,29 @@
       const predEl    = document.getElementById(`spotPred-${spot.id}`);
       if (!weatherEl || !predEl) return;
 
-      if (typeof spot.latitude !== "number" ||
-          typeof spot.longitude !== "number") {
-        weatherEl.textContent = "Weather now: location missing.";
-        predEl.textContent    = "Prediction (next 3 days): unavailable.";
+      const setWeatherRow = (rhsHtml) => {
+        weatherEl.innerHTML =
+          `<span data-i18n="home.weatherNow">Weather now</span>: ` + rhsHtml;
+      };
+
+      const setPredictionRow = (rhsHtml) => {
+        predEl.innerHTML =
+          `<span data-i18n="home.predictionNext3Days">Prediction (next 3 days)</span>: ` + rhsHtml;
+      };
+
+      if (typeof spot.latitude !== "number" || typeof spot.longitude !== "number") {
+        setWeatherRow(`<span data-i18n="home.locationMissing">location missing.</span>`);
+        setPredictionRow(`<span data-i18n="home.unavailable">unavailable.</span>`);
+        reapplyTranslations();
         return;
       }
 
       const lat = spot.latitude;
       const lng = spot.longitude;
 
-      weatherEl.textContent = "Weather now: loading…";
-      predEl.textContent    = "Prediction (next 3 days): loading…";
+      setWeatherRow(`<span data-i18n="home.loading">loading…</span>`);
+      setPredictionRow(`<span data-i18n="home.loading">loading…</span>`);
+      reapplyTranslations();
 
       try {
         const url =
@@ -326,23 +411,22 @@
         const ct  = cur.temperature_2m;
         const cw  = cur.wind_speed_10m;
         const cc  = cur.weather_code;
+
         const { icon, label } = getWeatherIconAndLabel(cc);
 
         const weatherParts = [];
         if (label) weatherParts.push(label);
-        if (typeof ct === "number") weatherParts.push(`${ct.toFixed(1)} °C`);
-        if (typeof cw === "number") weatherParts.push(`wind ${cw.toFixed(1)} m/s`);
+        if (typeof ct === "number") weatherParts.push(`${ct.toFixed(1)} ${t("home.unitCelsius")}`);
+        if (typeof cw === "number") weatherParts.push(`${t("home.wind")} ${cw.toFixed(1)} ${t("home.unitMetersPerSecond")}`);
 
-        weatherEl.textContent =
-          "Weather now: " + icon + " " + weatherParts.join(", ");
+        setWeatherRow(`${icon} ${weatherParts.join(", ")}`);
+        reapplyTranslations();
 
         const hourly = data.hourly || {};
         const times  = hourly.time || [];
         const temps  = hourly.temperature_2m || [];
         const winds  = hourly.wind_speed_10m || [];
         const presses = hourly.pressure_msl || [];
-
-        const weekdayShort = ["Sun.","Mon.","Tues.","Wed.","Thurs.","Fri.","Sat"];
 
         function getForecastForOffset(offset) {
           const base = new Date();
@@ -369,10 +453,10 @@
           const base = new Date();
           base.setDate(base.getDate() + offset);
 
-          const wd = weekdayShort[base.getDay()];
+          const wd = getWeekdayShortName(base.getDay());
 
           if (!fc) {
-            pieces.push(`${wd}: n/a`);
+            pieces.push(`${wd}: ${t("home.na")}`);
             continue;
           }
 
@@ -385,11 +469,11 @@
           );
 
           if (score == null) {
-            pieces.push(`${wd}: N/A`);
+            pieces.push(`${wd}: ${t("home.na")}`);
           } else {
-            let color = "#f97373"; // poor
-            if (score >= 70)      color = "#22c55e"; // good
-            else if (score >= 40) color = "#eab308"; // medium
+            let color = "#f97373";
+            if (score >= 70)      color = "#22c55e";
+            else if (score >= 40) color = "#eab308";
 
             pieces.push(
               `${wd} <span style="color:${color};font-weight:600;">${score.toFixed(0)}%</span>`
@@ -398,17 +482,16 @@
         }
 
         if (pieces.length) {
-          predEl.innerHTML =
-            "Prediction (next 3 days): " + pieces.join(" · ");
+          setPredictionRow(pieces.join(" · "));
         } else {
-          predEl.textContent =
-            "Prediction (next 3 days): not enough data yet.";
+          setPredictionRow(`<span data-i18n="home.notEnoughDataYet">not enough data yet.</span>`);
         }
+
+        reapplyTranslations();
       } catch (err) {
-        weatherEl.textContent =
-          "Weather now: failed to load.";
-        predEl.textContent =
-          "Prediction (next 3 days): failed to load.";
+        setWeatherRow(`<span data-i18n="home.failedToLoad">failed to load.</span>`);
+        setPredictionRow(`<span data-i18n="home.failedToLoad">failed to load.</span>`);
+        reapplyTranslations();
       }
     }
 
@@ -423,7 +506,8 @@
 
       if (snap.empty) {
         spotsList.innerHTML =
-          `<p class="muted-text">No spots yet. Add your first fishing spot.</p>`;
+          `<p class="muted-text" data-i18n="home.noSpotsYet">No spots yet. Add your first fishing spot.</p>`;
+        reapplyTranslations();
         return;
       }
 
@@ -454,9 +538,16 @@
           }
         });
 
-        const statsLine = total
-          ? `Total catches: ${total} • Biggest: ${biggestWeight.toFixed(2)} kg ${biggestSpecies}`
-          : "No catches yet.";
+        let statsLineHtml;
+        if (total) {
+          statsLineHtml = `
+            <span data-i18n="home.statsTotalCatches">Total catches</span>: ${total}
+            •
+            <span data-i18n="home.biggestFish">Biggest</span>: ${biggestWeight.toFixed(2)} kg ${biggestSpecies}
+          `;
+        } else {
+          statsLineHtml = `<span data-i18n="home.spotStatsNa">No catches yet.</span>`;
+        }
 
         const mapsUrl =
           typeof spot.latitude === "number" && typeof spot.longitude === "number"
@@ -467,12 +558,16 @@
           <div class="spot-header-line">
             <h3>${spot.name || "Unnamed spot"}</h3>
           </div>
-          <div class="muted-text">${statsLine}</div>
-          <div class="muted-text" id="spotWeather-${spot.id}">
-            Weather now: loading…
+          <div class="muted-text">
+            ${statsLineHtml}
           </div>
+
+          <div class="muted-text" id="spotWeather-${spot.id}">
+            <span data-i18n="home.weatherNow">Weather now</span>: <span data-i18n="home.loading">loading…</span>
+          </div>
+
           <div class="muted-text" id="spotPred-${spot.id}">
-            Prediction (next 3 days): loading…
+            <span data-i18n="home.predictionNext3Days">Prediction (next 3 days)</span>: <span data-i18n="home.loading">loading…</span>
           </div>
         `;
 
@@ -482,29 +577,30 @@
         const openBtn = document.createElement("button");
         openBtn.className = "secondary-btn";
         openBtn.textContent = "Open spot";
+        openBtn.setAttribute("data-i18n", "home.openSpot");
         openBtn.onclick = () => {
           window.location.href = `spot.html?id=${encodeURIComponent(spot.id)}`;
         };
+        actionsDiv.appendChild(openBtn);
 
         const addCatchBtn = document.createElement("button");
         addCatchBtn.className = "secondary-btn";
         addCatchBtn.textContent = "Add catch";
-        // IMPORTANT CHANGE: from main → from=main
+        addCatchBtn.setAttribute("data-i18n", "home.AddCatch");
         addCatchBtn.onclick = () => {
           window.location.href =
             `add-catch.html?spotId=${encodeURIComponent(spot.id)}&from=main`;
         };
+        actionsDiv.appendChild(addCatchBtn);
 
         const predBtn = document.createElement("button");
         predBtn.className = "secondary-btn";
         predBtn.textContent = "Predictions";
+        predBtn.setAttribute("data-i18n", "home.predictions");
         predBtn.onclick = () => {
           window.location.href =
             `predictions.html?spotId=${encodeURIComponent(spot.id)}`;
         };
-
-        actionsDiv.appendChild(openBtn);
-        actionsDiv.appendChild(addCatchBtn);
         actionsDiv.appendChild(predBtn);
 
         if (mapsUrl) {
@@ -514,6 +610,7 @@
           mapsBtn.target = "_blank";
           mapsBtn.rel = "noopener noreferrer";
           mapsBtn.textContent = "Google Maps";
+          mapsBtn.setAttribute("data-i18n", "home.googleMaps");
           actionsDiv.appendChild(mapsBtn);
         }
 
@@ -522,6 +619,8 @@
 
         await fetchWeatherAndPredictionForSpot(spot, spotCatches);
       }
+
+      reapplyTranslations();
     }
 
     /* ---------- Auth state ---------- */
@@ -554,8 +653,5 @@
       window.location.href = "add-spot.html";
     };
   </script>
-  <script src="cookie-consent.js"></script>
 </body>
 </html>
-
-
